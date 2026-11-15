@@ -1,0 +1,2929 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#f4efe3">
+<title>月都孤儿 · 钓鱼生存</title>
+<style>
+  :root {
+    --bg: #f4efe3; --panel: #fffdf5; --panel2: #f7f1e1;
+    --line: #ddd2b8; --line2: #c9bc9c;
+    --text: #5b5343; --dim: #9a8f78;
+    --accent: #3e8e7e; --accent2: #6fb7a8; --red: #d9776b; --gold: #c9983e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none;}
+  html,body{height:100%;height:100dvh;overflow:hidden;color:var(--text);}
+  body{
+    font-family:"SF Mono","Cascadia Mono",Consolas,system-ui,"PingFang SC","Microsoft YaHei",sans-serif;
+    background-color:var(--bg);
+    background-image:linear-gradient(45deg,#eee7d6 25%,transparent 25%,transparent 75%,#eee7d6 75%),
+      linear-gradient(45deg,#eee7d6 25%,transparent 25%,transparent 75%,#eee7d6 75%);
+    background-size:8px 8px;background-position:0 0,4px 4px;
+    touch-action:manipulation;font-size:13px;
+  }
+  #app{display:flex;flex-direction:column;gap:8px;height:100dvh;max-width:960px;margin:0 auto;
+    padding:calc(8px + env(safe-area-inset-top)) 10px calc(8px + env(safe-area-inset-bottom));}
+  #hud{display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:0 0 auto;}
+  .brand{font-size:14px;font-weight:900;letter-spacing:2px;color:var(--accent);white-space:nowrap;}
+  .stats{display:flex;gap:4px;margin-left:auto;flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;}
+  .stats::-webkit-scrollbar{display:none;} /* 隐藏滚动条 */
+  .stat{flex:0 0 auto;} /* 防止按钮被压缩 */
+  .stat{display:flex;align-items:center;gap:3px;height:26px;padding:0 8px;font-size:11px;
+    border:1px solid var(--line);border-left:3px solid var(--line2);
+    background:linear-gradient(180deg,var(--panel),var(--panel2));
+    clip-path:polygon(0 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%);cursor:pointer;}
+  .stat b{font-size:12px;color:var(--accent);font-variant-numeric:tabular-nums;}
+  .stat.warn b{color:var(--red);}
+  #main-content { display: flex; flex-direction: column; gap: 8px; flex: 1 1 auto; min-height: 0; }
+  .left-col { display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0;}
+  .right-col { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+  #status-panel { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+    background: var(--panel); padding: 8px; border: 1px solid var(--line2);
+    border-radius: 4px; flex: 0 0 auto; }
+  .stat-bar { display: flex; flex-direction: column; gap: 2px; }
+  .stat-bar-label { display: flex; justify-content: space-between; font-size: 10px; color: var(--dim); font-weight: bold; }
+  .bar { height: 8px; background: #e0d8c8; border-radius: 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0%; transition: width 0.3s; }
+  #bar-fatigue { background: #f39c12; }
+  #bar-stress { background: #e74c3c; }
+  #bar-pain { background: #9b59b6; }
+  #bar-trauma { background: #34495e; }
+  #stage-wrap { position: relative; width: 100%; aspect-ratio: 16/9; flex: 0 0 auto;
+    max-height: 38vh; /* 限制画布高度，防止在竖屏手机上占满整个屏幕 */
+    border: 1px solid var(--line2); background: #cfe6d8; overflow: hidden;
+    box-shadow: inset 0 0 0 2px rgba(255,253,245,.6); }
+  #cv { display: block; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+  #fish-panel { display: none; flex-direction: column; gap: 6px;
+    background: #e9f3ee; border: 1px solid var(--accent); padding: 8px;
+    border-radius: 4px; flex: 0 0 auto; box-shadow: 0 2px 8px rgba(62,142,126,.15); }
+  #fish-panel.show { display: flex; }
+  #fish-panel .eq-row { display: flex; gap: 4px; }
+  #fish-panel select { flex: 1; padding: 4px; font-size: 11px; border: 1px solid var(--line2); background: var(--panel); color: var(--text); border-radius: 2px; outline: none; }
+  #fish-panel .action-row { display: flex; gap: 8px; align-items: center; margin-top: 2px;}
+  #fishLog { flex: 1; font-size: 12px; font-weight: bold; color: var(--accent); line-height: 1.4; }
+  #btnFishMain { width: 100px; padding: 8px 0; font-size: 13px; flex: 0 0 auto; }
+  #controls { display: flex; flex-wrap: wrap; gap: 6px; overflow-y: auto; align-content: flex-start; padding-right: 2px; -webkit-overflow-scrolling: touch; }
+  .action-btn { padding: 12px 0; border: 0; cursor: pointer;
+    font-family: inherit; font-size: 13px; font-weight: 900; letter-spacing: 1px; color: #fff;
+    background: linear-gradient(180deg, var(--accent2), var(--accent));
+    box-shadow: 0 3px 0 rgba(62,142,126,.35);
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%);
+    flex: 1 1 calc(50% - 6px); min-width: 120px; }
+  .action-btn:active { transform: translateY(2px); filter: brightness(.95); }
+  .action-btn[disabled] { opacity: .5; cursor: default; transform: none; }
+  .action-btn.ghost { color: var(--accent); background: var(--panel); border: 1px solid var(--line); box-shadow: 0 3px 0 rgba(91,83,67,.1); }
+  .action-btn.danger { background: linear-gradient(180deg, #e9a08f, var(--red)); box-shadow: 0 3px 0 rgba(217,119,107,.4); }
+  @media (min-width: 700px) {
+    #main-content { flex-direction: row; }
+    .left-col { flex: 0 0 480px; }
+    .right-col { flex: 1 1 auto; }
+    
+    /* 电脑端恢复顶部按钮折行，并取消画布高度限制 */
+    .stats { flex-wrap: wrap; overflow-x: visible; }
+    #stage-wrap { max-height: none; }
+  }
+  .ov{position:fixed;inset:0;z-index:10;display:none;align-items:center;justify-content:center;
+    padding:14px;background:rgba(91,83,67,.4);backdrop-filter:blur(2px);}
+  .ov.show{display:flex;}
+  .panel{display:flex;flex-direction:column;gap:10px;width:min(500px,96%);max-height:94%;
+    padding:14px;background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--line2);box-shadow:0 18px 44px rgba(91,83,67,.3);}
+  .panel-head{display:flex;align-items:center;justify-content:space-between;border-bottom:1px dashed var(--line);padding-bottom:6px;}
+  .panel-head .dt{font-size:15px;font-weight:900;color:var(--accent);letter-spacing:2px;}
+  .panel-body{overflow-y:auto;font-size:12px;line-height:1.6;color:var(--text);display:flex;flex-direction:column;gap:8px;}
+  .list-row{display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--panel);border:1px solid var(--line);}
+  .btn-sm{padding:6px 12px;font-size:11px;font-weight:900;color:#fff;border:0;background:var(--accent);cursor:pointer;}
+  .portrait-box{display:flex;gap:12px;margin-bottom:8px; align-items: flex-start;}
+  #cvPortrait {width:96px; height:96px; image-rendering:pixelated; border-radius:4px; border:2px solid var(--line); background:#edf3ef;}
+  .dialogue{flex:1;display:flex;flex-direction:column;justify-content:center;font-weight:bold;color:var(--text);}
+  .bag-item { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-bottom: 1px dashed var(--line); flex-wrap: wrap; }
+  .bag-item canvas { width: 48px; height: 48px; image-rendering: pixelated; background: #edf3ef; border-radius: 4px; border: 1px solid var(--line2); }
+  .bag-info { flex: 1 1 120px; }
+  .bag-info b { font-size: 13px; }
+  .bag-info small { color: var(--dim); display: block; font-size: 11px; }
+  .bag-actions { display: flex; gap: 4px; flex-wrap: wrap; width: 100%; margin-top: 4px; }
+  .bag-actions button { flex: 1; padding: 4px 8px; font-size: 11px; font-weight: 900; color: #fff; border: 0; background: var(--accent); cursor: pointer; border-radius: 2px; }
+  .bag-actions button.warn { background: var(--red); }
+  .bag-actions button.ghost { background: var(--line2); color: var(--text); }
+  .bag-actions button.cold { background: #5b8ec9; }
+  .bag-actions button.freeze { background: #6fb7a8; }
+  #logBody { background: #1e1e1e; color: #ce9178; font-family: monospace; font-size: 11px; line-height: 1.5; padding: 8px; border-radius: 4px; min-height: 200px; max-height: 50vh; overflow-y: auto; white-space: pre-wrap; }
+  .log-sys { color: #4ec9b0; }
+  .log-dice { color: #dcdcaa; }
+  .log-ok { color: #6a9955; }
+  .log-err { color: #f44747; }
+  #toast{position:fixed;left:50%;bottom:20px;z-index:99;transform:translate(-50%,10px);
+    padding:8px 16px;background:rgba(91,83,67,.95);color:#fff;border-radius:4px;
+    font-size:12px;opacity:0;pointer-events:none;transition:all .2s;}
+  #toast.show{opacity:1;transform:translate(-50%,0);}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header id="hud">
+    <div class="brand">月都孤儿</div>
+    <div class="stats">
+      <div class="stat">💰 <b id="hudMoney">0</b></div>
+      <div class="stat">📅 <b id="hudDate">4/6 周日</b></div>
+      <div class="stat">🕒 <b id="hudTime">08:00</b></div>
+      <div class="stat">☁️ <b id="hudWeather">晴</b></div>
+      <div class="stat warn" id="stDebtBox">💳 <b id="hudDebt">100</b></div>
+      <div class="stat" id="hudTakotsuki" style="display:none;">🐙 <b id="hudTakotsukiText">0</b></div>
+      <div class="stat" onclick="openBag()">🎒 鱼篓</div>
+      <div class="stat" id="btnCold" onclick="openColdBox()" style="display:none;">🧊 冷藏</div>
+      <div class="stat" id="btnFrozen" onclick="openFrozenBox()" style="display:none;">❄️ 冷冻</div>
+      <div class="stat" onclick="openCodex()">📖 图鉴</div>
+      <div class="stat" onclick="openHelp()">❓ 玩法</div>
+      <div class="stat" onclick="openLog()">📜 日志</div>
+      <div class="stat" onclick="document.getElementById('ovStats').classList.add('show')">📊 状态</div>
+    </div>
+  </header>
+
+  <div id="main-content">
+    <div class="left-col">
+      <div id="status-panel">
+        <div class="stat-bar">
+          <div class="stat-bar-label"><span>疲劳</span><span id="lbl-fatigue">0</span></div>
+          <div class="bar"><i id="bar-fatigue"></i></div>
+        </div>
+        <div class="stat-bar">
+          <div class="stat-bar-label"><span>压力</span><span id="lbl-stress">0</span></div>
+          <div class="bar"><i id="bar-stress"></i></div>
+        </div>
+        <div class="stat-bar">
+          <div class="stat-bar-label"><span>疼痛</span><span id="lbl-pain">0</span></div>
+          <div class="bar"><i id="bar-pain"></i></div>
+        </div>
+        <div class="stat-bar">
+          <div class="stat-bar-label"><span>创伤</span><span id="lbl-trauma">0</span></div>
+          <div class="bar"><i id="bar-trauma"></i></div>
+        </div>
+      </div>
+
+      <div id="stage-wrap">
+        <canvas id="cv" width="512" height="288"></canvas>
+      </div>
+
+      <div id="fish-panel">
+        <div class="eq-row">
+          <select id="eqRod" onchange="updateEq()"></select>
+          <select id="eqLine" onchange="updateEq()"></select>
+          <select id="eqBait" onchange="updateEq()"></select>
+        </div>
+        <div class="action-row">
+          <div id="fishLog">水面很平静...</div>
+          <button class="action-btn" id="btnFishMain" onclick="fishMainAction()">抛 竿</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="right-col">
+      <div id="controls"></div>
+    </div>
+  </div>
+</div>
+
+<div class="ov" id="ovLog">
+  <div class="panel">
+    <div class="panel-head">
+      <span class="dt">底层计算日志</span>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-sm" style="background:var(--dim);" onclick="clearLog()">清空</button>
+        <button class="btn-sm" onclick="document.getElementById('ovLog').classList.remove('show')">关闭</button>
+      </div>
+    </div>
+    <div id="logBody"></div>
+  </div>
+</div>
+
+<div class="ov" id="ovDialog">
+  <div class="panel">
+    <div class="panel-head"><span class="dt" id="dlgTitle">提示</span></div>
+    <div class="portrait-box" id="dlgPortraitBox" style="display:none;">
+      <canvas id="cvPortrait" width="96" height="96"></canvas>
+      <div class="dialogue" id="dlgText"></div>
+    </div>
+    <div class="panel-body" id="dlgBody"></div>
+    <div id="dlgBtns" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;"></div>
+  </div>
+</div>
+
+<div class="ov" id="ovHelp">
+  <div class="panel" style="width:min(600px,96%);">
+    <div class="panel-head">
+      <span class="dt">生存指南</span>
+      <button class="btn-sm" onclick="document.getElementById('ovHelp').classList.remove('show')">关闭</button>
+    </div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;">
+      <button class="btn-sm" onclick="switchHelpTab('survival')">生存</button>
+      <button class="btn-sm" onclick="switchHelpTab('school')">学校</button>
+      <button class="btn-sm" onclick="switchHelpTab('fishing')">钓鱼</button>
+      <button class="btn-sm" onclick="switchHelpTab('trade')">交易</button>
+      <button class="btn-sm" onclick="switchHelpTab('gear')">其他</button>
+      <button class="btn-sm" style="background:var(--gold);" onclick="switchHelpTab('takotsuki')">🐙 章月</button>
+    </div>
+    <div class="panel-body" id="helpBody" style="min-height: 250px; line-height:1.8;"></div>
+  </div>
+</div>
+
+<div class="ov" id="ovCodex">
+  <div class="panel">
+    <div class="panel-head">
+      <span class="dt">鱼类图鉴</span>
+      <button class="btn-sm" onclick="document.getElementById('ovCodex').classList.remove('show')">关闭</button>
+    </div>
+    <div class="panel-body" id="codexBody"></div>
+  </div>
+</div>
+
+<div class="ov" id="ovStats">
+  <div class="panel">
+    <div class="panel-head">
+      <span class="dt">详细状态与物资</span>
+      <button class="btn-sm" onclick="document.getElementById('ovStats').classList.remove('show')">关闭</button>
+    </div>
+    <div class="panel-body">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+        <div>科学: <b id="sSci">30</b></div>
+        <div>数学: <b id="sMath">30</b></div>
+        <div>国文: <b id="sLit">30</b></div>
+        <div>历史: <b id="sHist">30</b></div>
+        <div>体育: <b id="sPE">50</b></div>
+      </div>
+      <hr style="border:0;border-top:1px dashed var(--line);margin:6px 0;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div>🐙 章月亲密度: <b id="sTakotsukiAffinity" style="color:var(--accent);">0</b></div>
+        <div>💊 春药值: <b id="sSpringDrug" style="color:var(--red);">0</b></div>
+      </div>
+      <hr style="border:0;border-top:1px dashed var(--line);margin:6px 0;">
+      <div><b>物资与装备</b></div>
+      <div class="list-row"><span>木材</span><span id="sWood">0</span></div>
+      <div class="list-row"><span>粗盐</span><span id="sSalt">0</span></div>
+      <div class="list-row"><span>闹钟</span><span id="sAlarm">未拥有</span></div>
+      <div class="list-row"><span>当前床铺</span><span id="sBed" style="color:var(--accent);font-weight:bold;">Lv0</span></div>
+      <div class="list-row"><span>当前鱼竿</span><span id="sEqRod" style="color:var(--accent);font-weight:bold;">无</span></div>
+      <div class="list-row"><span>当前鱼线</span><span id="sEqLine" style="color:var(--accent);font-weight:bold;">无</span></div>
+      <div class="list-row"><span>当前鱼饵</span><span id="sEqBait" style="color:var(--accent);font-weight:bold;">无</span></div>
+      <div style="margin-top:6px;display:flex;gap:6px;">
+        <button class="btn-sm" style="flex:1;" onclick="exportSave()">导出存档</button>
+        <button class="btn-sm" style="flex:1; background:var(--red);" onclick="if(confirm('确定要彻底删除进度重新开始吗？')){ localStorage.removeItem('yuedu_save_data'); location.reload(); }">删除存档</button>
+        <label class="btn-sm" style="flex:1;text-align:center;cursor:pointer;background:var(--dim);">
+          导入存档<input type="file" id="fileImport" style="display:none;" accept=".json" onchange="importSave(event)">
+        </label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ov" id="ovBag">
+  <div class="panel">
+    <div class="panel-head">
+      <span class="dt" id="bagTitle">鱼篓</span>
+      <button class="btn-sm" onclick="document.getElementById('ovBag').classList.remove('show')">关闭</button>
+    </div>
+    <div class="panel-body" id="bagBody"></div>
+    <div id="bagBottomBar" style="display:flex;gap:8px;margin-top:8px;"></div>
+  </div>
+</div>
+
+<div class="ov" id="ovSchool">
+  <div class="panel">
+    <div class="panel-head"><span class="dt" id="schSubj">第1节：科学课</span></div>
+    <div class="panel-body">
+      <div style="margin-bottom:10px;" id="schDesc">伊娃老师正在讲台上温柔地讲解着植物细胞的结构。</div>
+      <div style="display:flex;flex-direction:column;gap:8px;" id="schOptions"></div>
+    </div>
+  </div>
+</div>
+
+<div class="ov" id="ovShop">
+  <div class="panel">
+    <div class="panel-head">
+      <span class="dt">商店</span>
+      <button class="btn-sm" onclick="document.getElementById('ovShop').classList.remove('show')">关闭</button>
+    </div>
+    <div class="panel-body" id="shopBody"></div>
+  </div>
+</div>
+
+<div class="ov" id="ovCraft">
+  <div class="panel">
+    <div class="panel-head">
+      <span class="dt">制作</span>
+      <button class="btn-sm" onclick="document.getElementById('ovCraft').classList.remove('show')">关闭</button>
+    </div>
+    <div class="panel-body" id="craftBody">
+      <div class="list-row">
+        <div>
+          <b>简易木竿</b>
+          <small>消耗：木材×1。耗时30分钟。</small>
+        </div>
+        <button class="btn-sm" onclick="craftWoodRod()">制作</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ov" id="ovDoctor">
+  <div class="panel">
+    <div class="panel-head">
+      <span class="dt">面影歪的收购</span>
+      <button class="btn-sm" onclick="document.getElementById('ovDoctor').classList.remove('show')">关闭</button>
+    </div>
+    <div class="panel-body" style="font-size:12px; color:var(--text);">
+      「哎呀呀，拓海君，带什么好东西来看我了？让我看看……」
+    </div>
+    <div class="panel-body" id="doctorBody" style="border-top:1px dashed var(--line); padding-top:8px;"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+window.onerror = function(msg, url, line) {
+  alert("程序遇到错误，请刷新页面重试。\n错误信息: " + msg + "\n位置: 第 " + line + " 行");
+  return false;
+};
+const HELP_TEXT = {
+  survival: `<b>目标：攒够 100,000 元，买断 Sirei 的债务，重获自由！</b><br><br>
+    <b>债务压迫</b>每周日早上 8 点，Sirei 都会准时来收债。债务会逐周递增（100 ➔ 300 ➔ 500 ➔ 700 ➔ 1000 ➔ 1500 ➔ 2000封顶）。如果交不出钱，会被他打成 Bad End。如果在收债时反抗成功，可以免交这一次，债务顺延一周。<br><br>
+    <b>时间就是金钱</b>任何动作都会消耗时间。<br>
+    <b>四维状态</b>
+    - 疲劳：归零强制昏睡。去孤儿院睡觉恢复。<br>
+    - 压力：满 100 昏迷。散步/心理咨询降低。<br>
+    - 疼痛：受伤/挨打增加。去医院治疗。<br>
+    - 创伤：满 100 直接疯掉（Bad End）。心理咨询降低。<br><br>
+    <b>日常锻炼</b>公园跑步每天限一次，体育越低成功率越高（体育成绩+1）。`,
+  school: `<b>上课时间：周一至周五 9:00 - 15:00。</b><br><br>
+    <b>违纪判定</b>整点不在教室记 1 次违纪。整节课没去该科成绩 -3。<br>
+    <b>留堂</b>放学时有违纪会被强制留堂（每小时疲劳+9，压力+5），每天最多 2 小时，顺延。<br>
+    <b>Sirei 的皮带</b>回孤儿院时如果有违纪，会被 Sirei 抽打（疼痛+10，压力+5）。别想逃课！`,
+  fishing: `<b>核心判定：抛竿 ➔ 幸运判定（咬钩） ➔ 体育判定（提竿）。</b><br><br>
+    <b>天气系统（双刃剑）：</b><br>
+    - 🌧️ 小雨：幸运+1奖励骰。<br>
+    - 🌧️ 大雨：幸运与体育-1惩罚骰。大型鱼（≥50cm）权重翻倍，过滤杂鱼。<br>
+    - 🌫️ 大雾：体育-1惩罚骰。肉食鱼类概率翻倍。<br>
+    - ❄️ 雪天：体育-1惩罚骰。冬季限定鱼概率翻倍。<br>
+    - ⛈️ 雷暴：15%被雷劈。额外出现变异鱼，拉上必定损毁鱼线。<br><br>
+    <b>时段与季节</b>部分鱼有夜行/日行或特定季节限制。<br>
+    <b>装备损耗</b>遇到极大鱼或极重水产脱钩时，容易断线甚至折断鱼竿！`,
+  trade: `<b>农贸市场（卖普通鱼）：</b>
+    - 反季溢价：卖非当季限定鱼，价格 ×1.3。<br>
+    - 天气溢价：小雨天卖鱼 ×1.1；大雨/雾/雪/雷暴天卖鱼 ×1.3。（冰鲜鱼不吃天气溢价）。<br><br>
+    <b>医院（面影歪）</b>高价回收水产、河鲀、变异鱼和内脏。<br>
+    <b>博物馆</b>回收 50cm 以上变异鱼标本，以及古董宝物。<br><br>
+    <b>储存与加工：</b>
+    - 鱼放鱼篓 24 小时不新鲜，48 小时腐烂。买冰箱可保存。<br>
+    - 冷藏可以保存72小时的新鲜，冷冻可以永久保存，但会变成冰鲜，价格×0.9。<br>
+    - 新鲜河鲀在孤儿院去毒后可以卖到市场。<br>
+    - 用盐做鱼干可永久保存，价格×0.8。`,
+  gear: `<b>购物中心</b>购买鱼饵、鱼线、鱼竿，以及冰箱、鱼篓扩容、床铺升级。<br><br>
+    <b>图鉴系统</b>顶部📖可查看已捕获的鱼类。尺寸达到极限 90% 的个体会标有 ★。<br><br>
+    <b>存档</b>在📊状态面板中，可以导出/导入存档 JSON 文件，防丢失。`,
+  takotsuki: `<b>🐙 邂逅与携带</b><br>
+    在森林湖或海滩钓鱼时，极低概率钓上【灰色小章鱼】。它们会黏在你身上，每只提供 <b>钓鱼幸运+5</b> 的加成。<br>
+    <i style="color:var(--red);">注意：它们最多离水 24 小时。必须在超时前回到孤儿院把它们放进鱼缸，否则会干瘪消失并扣除亲密度！</i><br><br>
+    
+    <b>🏠 鱼缸与饲养</b><br>
+    初始没有鱼缸，需去购物中心花 80 元购买（可后续升级扩容）。<br>
+    在孤儿院每天可以【抚摸】和【喂食】各一次，能降低压力。亲密度高时，可购买【迷你鱼竿】让它陪你一起钓鱼。<br>
+    在森林湖或海滩，可以随时把身上携带的章月【放生】（亲密度清零）。<br><br>
+    
+    <b>💊 春药与夜袭</b><br>
+    与章月的互动（特别是带出门时的恶作剧）会增加【春药值】。<br>
+    在孤儿院睡觉时，如果春药值较高，可能触发【夜袭】。选择反抗（过体育-春药判定）成功会扣亲密度；选择迎合或失败会大幅增加春药值。<br><br>
+    
+    <b>🥚 产卵与孵化</b><br>
+    夜袭结束时，如果春药值 ≥ 60，体内会被注入【章月卵】（3天倒计时）。<br>
+    可以在孤儿院用【科学】检定把卵取出来，取出的卵是<b>顶级鱼饵</b>（必定咬钩、稀有度提升、提竿必定成功）。<br>
+    若放任不管，3天后卵会在体内强制孵化！如果鱼缸有空位，数量+1；没空位则幼体流失。<br><br>
+    
+    <b>🧪 黏液变现</b><br>
+    春药值 ≥ 10 时，可以在孤儿院【收集黏液】（每天限一次，降低春药值）。<br>
+    把黏液卖给医院的【面影歪】，他愿意出 300 元/瓶的高价收购！`
+};
+
+function openHelp() {
+  switchHelpTab('survival');
+  $('ovHelp').classList.add('show');
+}
+
+function switchHelpTab(key) {
+  $('helpBody').innerHTML = HELP_TEXT[key];
+}
+
+function openLog() { $('ovLog').classList.add('show'); const el = $('logBody'); el.scrollTop = el.scrollHeight; }
+function clearLog() { $('logBody').innerHTML = ''; }
+
+function drawQuestionIcon(ctx) {
+  ctx.clearRect(0, 0, 48, 48);
+  ctx.fillStyle = "#9a8f78";
+  ctx.font = "bold 34px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("?", 24, 26);
+}
+
+function openCodex() {
+  const body = $('codexBody'); body.innerHTML = '';
+  if (!state.caughtRecords) state.caughtRecords = {};
+  const locNames = { forest: "🌲 森林湖（淡水）", beach: "🌊 海滩（海水）" };
+  const rarNames = { common: "普通", uncommon: "少见", rare: "稀有", epic: "极品" };
+  const rarColors = { common: "#8a8a8a", uncommon: "#3e8e7e", rare: "#9b59b6", epic: "#c9983e" };
+  const order = ["common", "uncommon", "rare", "epic"];
+  const seasonNames = { spring: "春", summer: "夏", autumn: "秋", winter: "冬" };
+
+  function getTags(f) {
+    let tags = [];
+    if (f.seasons && f.seasons.length > 0) {
+      tags.push("[" + f.seasons.map(s => seasonNames[s]).join("/") + "限定]");
+    }
+    if (f.tags.includes("night")) tags.push("[夜行]");
+    if (f.tags.includes("day")) tags.push("[日行]");
+    if (f.tags.includes("rain_only")) tags.push("[仅雨天]");
+    if (f.tags.includes("snow_only")) tags.push("[仅雪天]");
+    if (f.tags.includes("seafood")) tags.push("[水产]");
+    if (f.tags.includes("predator")) tags.push("[肉食]");
+    if (f.tags.includes("toxic")) tags.push("[有毒]");
+    if (f.tags.includes("heavy")) tags.push("[极重]");
+    if (f.tags.includes("precious")) tags.push("[名贵]");
+    if (f.tags.includes("mutated")) tags.push("[变异]");
+    return tags;
+  }
+
+  ["forest", "beach"].forEach(loc => {
+    const fishList = FISH_DB[loc] || [];
+    let caughtFish = 0;
+    fishList.forEach(f => { if (state.caughtRecords[loc + "_" + f.name]) caughtFish++; });
+
+    const locTitle = document.createElement('div');
+    locTitle.style.cssText = "font-weight:900;color:var(--accent);margin:10px 0 4px;font-size:14px;border-bottom:1px dashed var(--line);padding-bottom:4px;";
+    locTitle.textContent = locNames[loc];
+    body.appendChild(locTitle);
+
+    const statLine = document.createElement('div');
+    statLine.style.cssText = "font-size:11px;color:var(--dim);margin-bottom:4px;";
+    statLine.textContent = `已捕获 ${caughtFish} / ${fishList.length} 种`;
+    body.appendChild(statLine);
+
+    order.forEach(rar => {
+      const fishes = fishList.filter(f => f.rarity === rar);
+      if (fishes.length === 0) return;
+
+      const rarTitle = document.createElement('div');
+      rarTitle.style.cssText = `font-size:12px;font-weight:900;color:${rarColors[rar]};margin:8px 0 4px;`;
+      rarTitle.textContent = `【${rarNames[rar]}】`;
+      body.appendChild(rarTitle);
+
+      fishes.forEach(f => {
+        const key = loc + "_" + f.name;
+        const rec = state.caughtRecords[key];
+        const row = document.createElement('div');
+        row.className = "list-row";
+        row.style.cssText = "padding:6px 8px;font-size:11px;margin-bottom:4px;gap:8px;align-items:center;justify-content:flex-start;";
+
+        const cvs = document.createElement('canvas');
+        cvs.width = 48; cvs.height = 48;
+        cvs.style.cssText = "width:36px;height:36px;image-rendering:pixelated;background:#edf3ef;border:1px solid var(--line2);border-radius:3px;flex:0 0 auto;";
+        const cctx = cvs.getContext('2d');
+        if (rec) drawFishIcon(cctx, f.shape, f.color);
+        else drawQuestionIcon(cctx);
+        row.appendChild(cvs);
+
+        const info = document.createElement('div');
+        info.style.cssText = "flex:1 1 auto;min-width:0;";
+        const displayName = f.name.replace("(水产)", "");
+        const tags = getTags(f);
+        const tagStr = tags.length > 0 ? tags.join(" ") : "";
+
+        if (rec) {
+          let maxMark = "";
+          if (f.max >= 50 && rec.size >= 50 && rec.size >= f.min + (f.max - f.min) * 0.9) {
+            maxMark = ' <span style="color:var(--gold);font-weight:900;">★</span>';
+          }
+          info.innerHTML = `<b>${displayName}</b>${maxMark}<br><small style="color:var(--dim)">极限 ${f.min}~${f.max}cm · 捕获 ${rec.count} 次${tagStr ? ' · ' + tagStr : ''}</small>`;
+        } else {
+          info.innerHTML = `<b style="color:var(--dim);">？？？</b><br><small style="color:var(--dim)">极限 ${f.min}~${f.max}cm${tagStr ? ' · ' + tagStr : ''}</small>`;
+        }
+        row.appendChild(info);
+
+        const right = document.createElement('div');
+        right.style.cssText = "text-align:right;flex:0 0 auto;min-width:56px;";
+        if (rec) {
+          right.innerHTML = `<b style="color:var(--accent);font-size:14px;">${rec.size} cm</b><br><small style="color:var(--dim)">个人最大</small>`;
+        } else {
+          right.innerHTML = `<b style="color:var(--dim);font-size:14px;">-- cm</b><br><small style="color:var(--dim)">未捕获</small>`;
+        }
+        row.appendChild(right);
+        body.appendChild(row);
+      });
+    });
+  });
+
+  $('ovCodex').classList.add('show');
+}
+function addLog(text, cls = "") {
+  const el = $('logBody'); const div = document.createElement('div');
+  if (cls) div.className = cls; div.textContent = text;
+  el.appendChild(div); while (el.children.length > 100) el.removeChild(el.firstChild);
+  if ($('ovLog').classList.contains('show')) el.scrollTop = el.scrollHeight;
+}
+function rnd(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+function checkSkill(val) {
+  let roll = rnd(1, 100);
+  let res = { roll, level: "失败", mul: 1.0, txt: "【失败】" };
+  if (roll === 1) { res.level = "大成功"; res.mul = 1.5; res.txt = "【大成功！】"; }
+  else if (roll <= Math.floor(val / 5)) { res.level = "极难成功"; res.mul = 1.3; res.txt = "【极难成功！】"; }
+  else if (roll <= Math.floor(val / 2)) { res.level = "困难成功"; res.mul = 1.2; res.txt = "【困难成功！】"; }
+  else if (roll <= val) { res.level = "常规成功"; res.mul = 1.1; res.txt = "【成功】"; }
+  addLog(`[技能检定] 目标 ≤${val}，掷出 ${roll} → ${res.txt}`, res.level === "失败" ? "log-err" : "log-ok");
+  return res;
+}
+function rollD100(pool) {
+  let rolls = [rnd(1, 100)];
+  let result = rolls[0]; let detail = "";
+  if (pool > 0) {
+    for (let i = 0; i < pool; i++) { let r = rnd(1, 100); rolls.push(r); if (r < result) result = r; }
+    detail = `[奖励骰 ${rolls.join(', ')} → 取最小 ${result}]`;
+  } else if (pool < 0) {
+    for (let i = 0; i < -pool; i++) { let r = rnd(1, 100); rolls.push(r); if (r > result) result = r; }
+    detail = `[惩罚骰 ${rolls.join(', ')} → 取最大 ${result}]`;
+  } else { detail = `[掷骰 ${result}]`; }
+  return { result, detail };
+}
+function checkLuck(val, pool) {
+  let roll = rollD100(pool);
+  let level = "", wait = 0, txt = "";
+  if (roll.result === 1) { level = "大成功"; wait = 0; txt = "大成功"; }
+  else if (roll.result <= Math.floor(val / 5)) { level = "极难成功"; wait = 7; txt = "极难成功"; }
+  else if (roll.result <= Math.floor(val / 2)) { level = "困难成功"; wait = 15; txt = "困难成功"; }
+  else if (roll.result <= val) { level = "常规成功"; wait = 30; txt = "常规成功"; }
+  else { level = "失败"; wait = 30; txt = "失败"; }
+  return { ...roll, level, wait, txt };
+}
+function pickRarity(luckLevel) {
+  const table = {
+    regular: [["common",70],["uncommon",25],["rare",4.5],["epic",0.5]],
+    hard:    [["common",40],["uncommon",40],["rare",17],["epic",3]],
+    extreme: [["common",10],["uncommon",30],["rare",45],["epic",15]],
+    crit:    [["common",0],["uncommon",0],["rare",50],["epic",50]]
+  };
+  let key = "regular";
+  if (luckLevel === "大成功") key = "crit";
+  else if (luckLevel === "极难成功") key = "extreme";
+  else if (luckLevel === "困难成功") key = "hard";
+  let r = Math.random() * 100; let acc = 0; let chosen = "common";
+  for (let [rar, pct] of table[key]) { acc += pct; if (r < acc) { chosen = rar; break; } }
+  return { chosen, roll: r.toFixed(1), key };
+}
+
+const pcv = document.getElementById('cvPortrait');
+const pctx = pcv.getContext('2d');
+function drawPortrait(type) {
+  pctx.clearRect(0, 0, 96, 96); pctx.imageSmoothingEnabled = false; const S = 4;
+  if (type === 'sirei') {
+    pctx.fillStyle = "#f4e6cf"; pctx.fillRect(0, 0, 96, 96);
+    pctx.fillStyle = "#c8b99c"; pctx.fillRect(5*S, 2*S, 14*S, 8*S); pctx.fillRect(4*S, 4*S, 16*S, 4*S);
+    pctx.fillStyle = "#f5e6d3"; pctx.fillRect(6*S, 7*S, 12*S, 9*S);
+    pctx.fillStyle = "#c8b99c"; pctx.fillRect(6*S, 7*S, 4*S, 2*S); pctx.fillRect(14*S, 7*S, 4*S, 2*S); pctx.fillRect(10*S, 7*S, 4*S, 1*S);
+    pctx.fillStyle = "#008080"; pctx.fillRect(8*S, 10*S, 2*S, 1*S); pctx.fillRect(14*S, 10*S, 2*S, 1*S);
+    pctx.fillStyle = "#5b5343"; pctx.fillRect(8*S, 11*S, 2*S, 1*S); pctx.fillRect(14*S, 11*S, 2*S, 1*S);
+    pctx.fillStyle = "#d9776b"; pctx.fillRect(11*S, 13*S, 2*S, 1*S); pctx.fillRect(10*S, 14*S, 4*S, 1*S);
+    pctx.fillStyle = "#ffffff"; pctx.fillRect(10*S, 16*S, 4*S, 6*S);
+    pctx.fillStyle = "#1a252c"; pctx.fillRect(4*S, 16*S, 16*S, 8*S); pctx.fillRect(6*S, 14*S, 3*S, 2*S); pctx.fillRect(15*S, 14*S, 3*S, 2*S);
+    pctx.fillStyle = "#e74c3c"; pctx.fillRect(10*S, 16*S, 4*S, 2*S); pctx.fillRect(11*S, 17*S, 2*S, 1*S);
+  } else if (type === 'omokage') {
+    pctx.fillStyle = "#EDF3EF"; pctx.fillRect(0, 0, 96, 96);
+    pctx.fillStyle = "#0000FF"; pctx.fillRect(4*S, 3*S, 16*S, 5*S); pctx.fillRect(3*S, 4*S, 18*S, 3*S);
+    pctx.fillRect(5*S, 1*S, 2*S, 2*S); pctx.fillRect(8*S, 2*S, 1*S, 1*S); pctx.fillRect(12*S, 1*S, 1*S, 1*S); pctx.fillRect(16*S, 2*S, 2*S, 2*S);
+    pctx.fillStyle = "#F8F8F8"; pctx.fillRect(5*S, 8*S, 14*S, 8*S);
+    pctx.fillStyle = "#0000FF"; pctx.fillRect(4*S, 6*S, 16*S, 3*S); pctx.fillRect(6*S, 9*S, 3*S, 1*S);
+    pctx.fillStyle = "#333333"; pctx.fillRect(13*S, 10*S, 4*S, 2*S);
+    pctx.fillStyle = "#0000FF"; pctx.fillRect(14*S, 10*S, 2*S, 1*S);
+    pctx.fillStyle = "#111111"; pctx.fillRect(7*S, 9*S, 5*S, 4*S);
+    pctx.fillStyle = "#FFFFFF"; pctx.fillRect(8*S, 10*S, 2*S, 1*S);
+    pctx.fillStyle = "#333333"; pctx.fillRect(11*S, 14*S, 2*S, 1*S);
+    pctx.fillStyle = "#C0C0C0"; pctx.fillRect(4*S, 11*S, 1*S, 2*S);
+    pctx.fillStyle = "#FFD700"; pctx.fillRect(19*S, 11*S, 1*S, 2*S);
+    pctx.fillStyle = "#111111"; pctx.fillRect(3*S, 16*S, 18*S, 8*S); pctx.fillRect(5*S, 14*S, 4*S, 2*S); pctx.fillRect(15*S, 14*S, 4*S, 2*S);
+    pctx.fillStyle = "#333333"; pctx.fillRect(8*S, 16*S, 8*S, 8*S);
+    pctx.fillStyle = "#C0C0C0"; pctx.fillRect(10*S, 19*S, 4*S, 1*S); pctx.fillRect(11*S, 20*S, 2*S, 2*S);
+    pctx.fillStyle = "#A0A0A0";
+    pctx.fillRect(5*S, 19*S, 2*S, 1*S); pctx.fillRect(4*S, 20*S, 3*S, 2*S);
+    pctx.fillRect(16*S, 21*S, 2*S, 2*S); pctx.fillRect(17*S, 20*S, 1*S, 1*S);
+  } else if (type === 'takotsuki') {
+    pctx.clearRect(0, 0, 96, 96); 
+    pctx.imageSmoothingEnabled = false; 
+    pctx.fillStyle = "#b0b0b0"; 
+    pctx.fillRect(3*S, 7*S, 18*S, S);
+    pctx.fillRect(4*S, 6*S, 16*S, S);
+    pctx.fillRect(5*S, 5*S, 14*S, S);
+    pctx.fillRect(7*S, 4*S, 10*S, S);
+    pctx.fillRect(9*S, 3*S, 6*S, S);
+    pctx.fillRect(2*S, 9*S, S, 6*S);
+    pctx.fillRect(21*S, 9*S, S, 6*S);
+    pctx.fillStyle = "#9e9e9e"; 
+    pctx.fillRect(3*S, 8*S, 18*S, 9*S);
+    pctx.fillRect(5*S, 6*S, 14*S, 11*S);
+    pctx.fillRect(4*S, 7*S, 16*S, 10*S);
+    pctx.fillRect(7*S, 5*S, 10*S, S);
+    pctx.fillRect(9*S, 4*S, 6*S, S);
+    pctx.fillRect(2*S, 10*S, S, 6*S);
+    pctx.fillRect(21*S, 10*S, S, 6*S);
+    pctx.fillStyle = "#7376b9"; 
+    pctx.fillRect(6*S, 10*S, 3*S, 3*S);
+    pctx.fillRect(15*S, 10*S, 3*S, 3*S);
+    pctx.fillStyle = "#ffffff";
+    pctx.fillRect(7*S, 10*S, 1*S, 1*S);
+    pctx.fillRect(16*S, 10*S, 1*S, 1*S);
+    pctx.fillStyle = "#333333";
+    pctx.fillRect(5*S, 9*S, 1*S, 1*S);
+    pctx.fillRect(7*S, 8*S, 1*S, 1*S);
+    pctx.fillRect(9*S, 9*S, 1*S, 1*S);
+    pctx.fillRect(14*S, 9*S, 1*S, 1*S);
+    pctx.fillRect(16*S, 8*S, 1*S, 1*S);
+    pctx.fillRect(18*S, 9*S, 1*S, 1*S);
+    pctx.strokeStyle = "#7a7a7a";
+    pctx.lineWidth = 2;
+    pctx.beginPath(); pctx.arc(7.5*S, 11.5*S, 3*S, 0, Math.PI); pctx.stroke();
+    pctx.beginPath(); pctx.arc(16.5*S, 11.5*S, 3*S, 0, Math.PI); pctx.stroke();
+    pctx.beginPath(); pctx.moveTo(10.5*S, 12*S); pctx.lineTo(13.5*S, 12*S); pctx.stroke();
+    pctx.strokeStyle = "#000000";
+    pctx.beginPath(); pctx.moveTo(11*S, 13*S); pctx.lineTo(12*S, 14*S); pctx.lineTo(13*S, 13*S);
+    pctx.stroke();
+    pctx.fillStyle = "#8f8f8f"; 
+    pctx.fillRect(1.5*S, 17*S, 21*S, 4*S);
+    pctx.fillRect(13.5*S, 21*S, 4*S, S);
+    pctx.fillRect(6.5*S, 21*S, 4*S, S);
+    pctx.fillRect(18.5*S, 21*S, 3*S, S);
+    pctx.fillRect(2.5*S, 21*S, 3*S, S);
+    pctx.fillRect(13.5*S, 16*S, 4*S, S);
+    pctx.fillRect(6.5*S, 16*S, 4*S, S);
+    pctx.fillRect(18.5*S, 16*S, 3*S, S);
+    pctx.fillRect(2.5*S, 16*S, 3*S, S);
+    pctx.fillStyle = "#7f7f7f";
+    pctx.fillRect(11.5*S, 17*S, S, 4*S);
+    pctx.fillRect(12.5*S, 21*S, S, S);
+    pctx.fillRect(10.5*S, 21*S, S, S);
+    pctx.fillRect(13.5*S, 22*S, 4*S, S);
+    pctx.fillRect(6.5*S, 22*S, 4*S, S);
+    pctx.fillRect(17.5*S, 21*S, S, S);
+    pctx.fillRect(18.5*S, 18*S, S, 3*S);
+    pctx.fillRect(17.5*S, 17*S, S, S);
+    pctx.fillRect(5.5*S, 21*S, S, S);
+    pctx.fillRect(4.5*S, 18*S, S, 3*S);
+    pctx.fillRect(5.5*S, 17*S, S, S);
+    pctx.fillRect(18.5*S, 22*S, 3*S, S);
+    pctx.fillRect(2.5*S, 22*S, 3*S, S);
+    pctx.fillRect(21.5*S, 21*S, S, S);
+    pctx.fillRect(22.5*S, 18*S, S, 3*S);
+    pctx.fillRect(21.5*S, 17*S, S, S);
+    pctx.fillRect(1.5*S, 21*S, S, S);
+    pctx.fillRect(0.5*S, 18*S, S, 3*S);
+    pctx.fillRect(1.5*S, 17*S, S, S);
+  }
+}
+function drawFishIcon(ctx, shape, color) {
+  ctx.clearRect(0, 0, 48, 48); ctx.imageSmoothingEnabled = false; const S = 3; ctx.fillStyle = color || "#9e9e9e";
+  if (shape === 'eel') { ctx.fillRect(4*S, 7*S, 8*S, 2*S); ctx.fillRect(2*S, 6*S, 2*S, 4*S); }
+  else if (shape === 'slender') { ctx.fillRect(4*S, 6*S, 8*S, 4*S); ctx.fillRect(2*S, 4*S, 2*S, 3*S); }
+  else if (shape === 'round') { ctx.fillRect(5*S, 4*S, 6*S, 8*S); ctx.fillRect(3*S, 5*S, 2*S, 6*S); }
+  else if (shape === 'crab') { ctx.fillRect(5*S, 6*S, 6*S, 5*S); ctx.fillRect(2*S, 5*S, 2*S, 2*S); ctx.fillRect(12*S, 5*S, 2*S, 2*S); }
+  else if (shape === 'octopus') { 
+    ctx.fillRect(5*S, 3*S, 6*S, 7*S); ctx.fillRect(4*S, 5*S, 8*S, 4*S); 
+    ctx.fillStyle = "#000"; ctx.fillRect(5*S, 6*S, 1*S, 1*S); ctx.fillRect(10*S, 6*S, 1*S, 1*S);
+  }
+  else if (shape === 'lobster') { ctx.fillRect(6*S, 6*S, 4*S, 6*S); ctx.fillRect(4*S, 12*S, 8*S, 1*S); }
+  else if (shape === 'organ') {
+    ctx.fillRect(5*S, 5*S, 6*S, 6*S);
+    ctx.fillStyle = "#8b3a3a"; ctx.fillRect(6*S, 6*S, 4*S, 4*S);
+    ctx.fillStyle = "#4a1010"; ctx.fillRect(7*S, 7*S, 2*S, 2*S);
+  }
+  else if (shape === 'takotsuki') {
+    ctx.fillStyle = "#9e9e9e";
+    ctx.fillRect(4*S, 2*S, 8*S, 7*S); 
+    ctx.fillRect(3*S, 4*S, 10*S, 4*S);
+    ctx.fillRect(3*S, 9*S, 2*S, 3*S);
+    ctx.fillRect(6*S, 9*S, 2*S, 3*S);
+    ctx.fillRect(10*S, 9*S, 2*S, 3*S);
+    ctx.fillRect(8*S, 9*S, 2*S, 2*S);
+    ctx.fillStyle = "#7376b9";
+    ctx.fillRect(5*S, 5*S, 2*S, 2*S);
+    ctx.fillRect(9*S, 5*S, 2*S, 2*S);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(5*S, 5*S, 1*S, 1*S);
+    ctx.fillRect(9*S, 5*S, 1*S, 1*S);
+    ctx.fillStyle = "#333";
+    ctx.fillRect(4*S, 4*S, 1*S, 1*S);
+    ctx.fillRect(6*S, 4*S, 1*S, 1*S);
+    ctx.fillRect(8*S, 4*S, 1*S, 1*S);
+    ctx.fillRect(10*S, 4*S, 1*S, 1*S);
+    ctx.fillStyle = "#c0c0c0";
+    ctx.fillRect(4*S, 7*S, 2*S, 1*S);
+    ctx.fillRect(10*S, 7*S, 2*S, 1*S);
+  }
+  else { ctx.fillRect(5*S, 5*S, 6*S, 6*S); ctx.fillRect(3*S, 4*S, 2*S, 8*S); }
+  if (shape !== 'crab' && shape !== 'octopus' && shape !== 'organ' && shape !== 'takotsuki') { ctx.fillStyle = "#fff"; ctx.fillRect(9*S, 6*S, 1*S, 1*S); ctx.fillStyle = "#000"; ctx.fillRect(10*S, 6*S, 1*S, 1*S); }
+}
+function drawTreasureIcon(ctx, rarity) {
+  ctx.clearRect(0, 0, 48, 48); ctx.imageSmoothingEnabled = false; const S = 3;
+  if (rarity === 'epic') { ctx.fillStyle = "#f1c40f"; ctx.fillRect(4*S, 4*S, 8*S, 8*S); }
+  else if (rarity === 'rare') { ctx.fillStyle = "#9b59b6"; ctx.fillRect(5*S, 5*S, 6*S, 6*S); }
+  else { ctx.fillStyle = "#95a5a6"; ctx.fillRect(4*S, 6*S, 8*S, 4*S); }
+}
+
+const WEATHER_NAMES = { sunny: "晴", cloudy: "阴", fog: "雾", rain_light: "小雨", rain_heavy: "大雨", thunder: "雷暴", snow: "雪" };
+const SEASON_NAMES = { spring: "春季", summer: "夏季", autumn: "秋季", winter: "冬季" };
+const RARITY_NAMES = { common: "普通", uncommon: "少见", rare: "稀有", epic: "极品" };
+const LOCATIONS = {
+  orphanage: { name: "孤儿院", open: 0, close: 24 }, school: { name: "学校", open: 7, close: 17 }, park: { name: "公园", open: 0, close: 24 }, 
+  mall: { name: "购物中心", open: 6, close: 21 }, market: { name: "农贸市场", open: 5, close: 19 }, hospital: { name: "医院", open: 0, close: 24 }, 
+  museum: { name: "博物馆", open: 9, close: 18 }, beach: { name: "海滩", open: 0, close: 24 }, forest: { name: "森林湖", open: 0, close: 24 }, 
+  cafe: { name: "咖啡馆", open: 7, close: 21 }, villa: { name: "别墅区", open: 7, close: 21 }
+};
+const DISTANCES = {
+  orphanage: { school: 15, park: 10, mall: 5, hospital: 15, market: 20, museum: 20, beach: 5, forest: 15, cafe: 15, villa: 5 },
+  school: { orphanage: 15, park: 5, mall: 10, market: 5, museum: 10, hospital: 10, beach: 10, forest: 10, cafe: 5, villa: 15 },
+  park: { orphanage: 10, school: 5, mall: 5, market: 10, museum: 10, hospital: 5, beach: 5, forest: 10, cafe: 10, villa: 10 },
+  mall: { orphanage: 5, school: 10, park: 5, market: 15, museum: 15, hospital: 10, beach: 10, forest: 10, cafe: 15, villa: 10 },
+  market: { orphanage: 20, school: 5, park: 10, mall: 15, museum: 15, hospital: 5, beach: 15, forest: 5, cafe: 10, villa: 15 },
+  hospital: { orphanage: 15, school: 10, park: 5, mall: 10, market: 5, museum: 15, beach: 10, forest: 5, cafe: 15, villa: 10 },
+  museum: { orphanage: 20, school: 10, park: 10, mall: 15, market: 15, hospital: 15, beach: 15, forest: 15, cafe: 5, villa: 20 },
+  beach: { orphanage: 5, school: 10, park: 5, mall: 10, market: 15, hospital: 10, museum: 15, forest: 15, cafe: 10, villa: 10 },
+  forest: { orphanage: 15, school: 10, park: 10, mall: 10, market: 5, hospital: 5, museum: 15, beach: 15, cafe: 15, villa: 10 },
+  cafe: { orphanage: 15, school: 5, park: 10, mall: 15, market: 10, hospital: 15, museum: 5, beach: 10, forest: 15, villa: 15 },
+  villa: { orphanage: 5, school: 15, park: 10, mall: 10, market: 15, hospital: 10, museum: 20, beach: 10, forest: 10, cafe: 15 }
+};
+const RODS = { wood: { name: "简易木竿", breakBig: 0.30, breakHeavy: 0.50 }, fiberglass: { name: "玻璃钢竿", breakBig: 0.10, breakHeavy: 0.30 }, carbon_rod: { name: "碳素海竿", breakBig: 0, breakHeavy: 0.20 } };
+const LINES = { nylon: { name: "普通尼龙线", breakBig: 0.80 }, carbon: { name: "高强度碳线", breakBig: 0.30 } };
+const BAITS = { worm: { name: "普通蚯蚓", pool: 0 }, smell: { name: "特制腥香饵", pool: 1 }, lure: { name: "秘制仿生饵", pool: 2 } };
+const DEBT_TABLE = [100, 300, 500, 700, 1000, 1500, 2000];
+
+const BED_RECOVERY = [
+  { fat: -6, stress: -1, trauma: 0 },       // Lv0
+  { fat: -7, stress: -1.5, trauma: 0 },     // Lv1
+  { fat: -8, stress: -2, trauma: -0.3 },    // Lv2
+  { fat: -9.5, stress: -2.5, trauma: -0.5 },// Lv3
+  { fat: -11, stress: -3, trauma: -0.7 },   // Lv4
+  { fat: -13, stress: -3.5, trauma: -1 }    // Lv5
+];
+
+const FISH_DB = {
+  forest: [
+    { name: "麦穗鱼", min: 5, max: 15, price: 1.5, color: "#9e9e9e", shape: "slender", rarity: "common", tags: [], seasons: [] },
+    { name: "野生鲫鱼", min: 10, max: 40, price: 2.0, color: "#d0c0a0", shape: "normal", rarity: "common", tags: [], seasons: [] },
+    { name: "泥鳅", min: 8, max: 20, price: 1.5, color: "#605040", shape: "eel", rarity: "common", tags: [], seasons: [] },
+    { name: "小龙虾(水产)", min: 5, max: 15, price: 1.5, color: "#c0392b", shape: "lobster", rarity: "common", tags: ["seafood"], seasons: ["summer"] },
+    { name: "河蚌(水产)", min: 3, max: 10, price: 2.0, color: "#ecf0f1", shape: "shell", rarity: "common", tags: ["seafood"], seasons: [] },
+    { name: "普通鲤鱼", min: 25, max: 75, price: 2.0, color: "#e09070", shape: "normal", rarity: "uncommon", tags: [], seasons: [] },
+    { name: "罗非鱼", min: 15, max: 35, price: 2.5, color: "#7d8a7d", shape: "normal", rarity: "uncommon", tags: [], seasons: [] },
+    { name: "淡水鲈鱼", min: 25, max: 60, price: 3.0, color: "#80a070", shape: "normal", rarity: "uncommon", tags: ["predator"], seasons: [] },
+    { name: "黄颡鱼", min: 10, max: 30, price: 3.0, color: "#c9a94f", shape: "normal", rarity: "uncommon", tags: ["predator"], seasons: ["spring"] },
+    { name: "鳑鲏", min: 5, max: 12, price: 1.5, color: "#d4a0a0", shape: "round", rarity: "uncommon", tags: [], seasons: ["spring"] },
+    { name: "马口鱼", min: 15, max: 35, price: 2.5, color: "#a8b8c0", shape: "slender", rarity: "uncommon", tags: ["predator"], seasons: ["spring"] },
+    { name: "草鱼", min: 30, max: 95, price: 2.5, color: "#8a9a6a", shape: "normal", rarity: "rare", tags: [], seasons: [] },
+    { name: "鲶鱼", min: 40, max: 90, price: 2.5, color: "#5a5a4a", shape: "eel", rarity: "rare", tags: ["predator"], seasons: [] },
+    { name: "溪石斑", min: 10, max: 25, price: 4.0, color: "#7a8a6a", shape: "normal", rarity: "rare", tags: [], seasons: [] },
+    { name: "黑鱼(乌鳢)", min: 25, max: 70, price: 3.0, color: "#34495e", shape: "eel", rarity: "rare", tags: ["predator"], seasons: ["summer"] },
+    { name: "冷水狗鱼", min: 30, max: 90, price: 3.5, color: "#6a7a8a", shape: "slender", rarity: "rare", tags: ["predator"], seasons: ["winter"] },
+    { name: "河鲀", min: 15, max: 35, price: 4.5, color: "#e0c080", shape: "round", rarity: "rare", tags: ["toxic"], seasons: ["autumn"] },
+    { name: "香鱼", min: 15, max: 30, price: 5.0, color: "#a8c0a0", shape: "slender", rarity: "rare", tags: ["precious"], seasons: ["autumn"] },
+    { name: "翘嘴鲌", min: 40, max: 90, price: 3.5, color: "#b0b8c0", shape: "slender", rarity: "rare", tags: ["predator", "night"], seasons: ["summer"] },
+    { name: "花鳗鲡", min: 60, max: 120, price: 4.0, color: "#c9a06a", shape: "eel", rarity: "rare", tags: ["predator", "night"], seasons: ["spring"] },
+    { name: "大闸蟹(水产)", min: 10, max: 20, price: 4.5, color: "#27ae60", shape: "crab", rarity: "rare", tags: ["seafood"], seasons: ["summer", "autumn"] },
+    { name: "鱤鱼(水老虎)", min: 80, max: 160, price: 3.0, color: "#8090a0", shape: "slender", rarity: "epic", tags: ["predator"], seasons: [] },
+    { name: "野生青鱼", min: 50, max: 140, price: 3.0, color: "#3a4a3a", shape: "normal", rarity: "epic", tags: [], seasons: ["autumn"] },
+    { name: "哲罗鲑", min: 80, max: 180, price: 4.0, color: "#b05a4a", shape: "slender", rarity: "epic", tags: ["predator"], seasons: ["winter"] },
+    { name: "大马哈鱼", min: 80, max: 140, price: 3.0, color: "#c98a5a", shape: "normal", rarity: "epic", tags: ["rain_only"], seasons: ["autumn"] },
+    { name: "江鳕", min: 50, max: 100, price: 4.0, color: "#6a6a7a", shape: "eel", rarity: "epic", tags: ["predator", "night"], seasons: ["winter"] }, 
+    { name: "灰色小章鱼", min: 10, max: 10, price: 0, color: "#9e9e9e", shape: "takotsuki", rarity: "epic", tags: ["takotsuki"], seasons: [] },
+  ],
+  beach: [
+    { name: "沙丁鱼", min: 10, max: 20, price: 1.5, color: "#90a4ae", shape: "slender", rarity: "common", tags: [], seasons: [] },
+    { name: "凤尾鱼", min: 8, max: 18, price: 1.5, color: "#a0b0c0", shape: "slender", rarity: "common", tags: [], seasons: [] },
+    { name: "鲭鱼(青花鱼)", min: 20, max: 45, price: 2.0, color: "#6090a0", shape: "normal", rarity: "common", tags: [], seasons: [] },
+    { name: "海鲈鱼", min: 20, max: 70, price: 2.5, color: "#b0b0b0", shape: "normal", rarity: "uncommon", tags: ["predator"], seasons: [] },
+    { name: "鲻鱼", min: 25, max: 50, price: 2.5, color: "#a0a8a0", shape: "normal", rarity: "uncommon", tags: [], seasons: [] },
+    { name: "银鲳鱼", min: 15, max: 35, price: 3.5, color: "#d0d8e0", shape: "round", rarity: "uncommon", tags: [], seasons: ["spring"] },
+    { name: "真鲷", min: 25, max: 65, price: 3.5, color: "#e08080", shape: "normal", rarity: "uncommon", tags: [], seasons: ["autumn"] },
+    { name: "秋刀鱼", min: 20, max: 35, price: 2.5, color: "#7a9aa0", shape: "slender", rarity: "uncommon", tags: [], seasons: ["autumn"] },
+    { name: "六线鱼", min: 20, max: 40, price: 3.0, color: "#8a7050", shape: "normal", rarity: "uncommon", tags: [], seasons: ["spring"] },
+    { name: "鱿鱼(水产)", min: 15, max: 40, price: 2.5, color: "#e59866", shape: "octopus", rarity: "uncommon", tags: ["seafood", "predator"], seasons: ["spring"] },
+    { name: "黑鲷", min: 15, max: 55, price: 3.0, color: "#4a4a4a", shape: "normal", rarity: "rare", tags: ["predator"], seasons: [] },
+    { name: "海鳗", min: 40, max: 100, price: 3.5, color: "#5a6a7a", shape: "eel", rarity: "rare", tags: ["predator"], seasons: [] },
+    { name: "马鲛鱼(鲅鱼)", min: 40, max: 85, price: 3.0, color: "#6a8a9a", shape: "slender", rarity: "rare", tags: ["predator"], seasons: ["summer"] },
+    { name: "深海比目鱼", min: 20, max: 60, price: 4.0, color: "#8a7a6a", shape: "round", rarity: "rare", tags: [], seasons: ["winter"] },
+    { name: "普通章鱼(水产)", min: 30, max: 80, price: 4.0, color: "#c08080", shape: "octopus", rarity: "rare", tags: ["seafood", "predator"], seasons: ["autumn"] },
+    { name: "海胆(水产)", min: 10, max: 20, price: 3.0, color: "#d35400", shape: "urchin", rarity: "rare", tags: ["seafood"], seasons: ["summer"] },
+    { name: "波士顿龙虾(水产)", min: 30, max: 60, price: 6.0, color: "#d35400", shape: "lobster", rarity: "rare", tags: ["seafood", "precious"], seasons: ["winter"] },
+    { name: "龙胆石斑鱼", min: 90, max: 180, price: 4.5, color: "#6a7a6a", shape: "normal", rarity: "epic", tags: ["predator"], seasons: [] },
+    { name: "东星斑", min: 30, max: 60, price: 6.0, color: "#e08060", shape: "normal", rarity: "epic", tags: ["predator"], seasons: [] },
+    { name: "大黄鱼", min: 40, max: 80, price: 8.0, color: "#e0b050", shape: "normal", rarity: "epic", tags: [], seasons: [] },
+    { name: "小型金枪鱼", min: 60, max: 180, price: 4.0, color: "#4a5a7a", shape: "spindle", rarity: "epic", tags: ["predator"], seasons: ["summer"] },
+    { name: "大西洋鳕鱼", min: 70, max: 150, price: 3.0, color: "#8a8a7a", shape: "normal", rarity: "epic", tags: [], seasons: ["winter"] },
+    { name: "旗鱼", min: 150, max: 250, price: 5.0, color: "#5b8ec9", shape: "spindle", rarity: "epic", tags: ["predator", "day"], seasons: ["summer"] },
+    { name: "蓝鳍金枪鱼", min: 150, max: 250, price: 6.0, color: "#2a3a5a", shape: "spindle", rarity: "epic", tags: ["predator"], seasons: ["autumn"] },
+    { name: "盲鳗", min: 30, max: 60, price: 3.0, color: "#a89a9a", shape: "eel", rarity: "epic", tags: ["snow_only"], seasons: ["winter"] },
+    { name: "帝王蟹(水产)", min: 80, max: 150, price: 8.0, color: "#c0392b", shape: "crab", rarity: "epic", tags: ["seafood", "heavy"], seasons: ["winter"] },
+    { name: "松叶蟹(水产)", min: 60, max: 90, price: 7.0, color: "#d06040", shape: "crab", rarity: "epic", tags: ["seafood", "heavy"], seasons: ["winter"] }, 
+    { name: "灰色小章鱼", min: 10, max: 10, price: 0, color: "#9e9e9e", shape: "takotsuki", rarity: "epic", tags: ["takotsuki"], seasons: [] },
+  ]
+};
+const TREASURE_DB = { common: ["发黑的硬币", "生锈的铁钉"], uncommon: ["古老的怀表", "银质小汤匙"], rare: ["镶嵌宝石的戒指", "青铜烛台"], epic: ["纯金雕像", "失落王冠的碎片"] };
+
+let state = {
+  day: 6, month: 4, year: 2025, weekday: 0, hour: 8, minute: 0, totalMinutes: 0,
+  season: "spring", mainWeather: "sunny", weather: "sunny", displayWeather: "sunny", thunderStart: -1, thunderEnd: -1, _pendingThunder: false,
+  loc: "orphanage", money: 0, debt: 100, nextDebtDay: 133, debtPaidCount: 0,
+  fatigue: 0, stress: 0, pain: 0, trauma: 0,
+  stats: { sci: 30, math: 30, lit: 30, hist: 30, pe: 50 },
+  eq: { rod: "wood", line: "nylon", bait: "worm" },
+  inv: { rods: { wood: 1, fiberglass: 0, carbon_rod: 0 }, lines: { nylon: 5, carbon: 0 }, baits: { worm: 5, smell: 0, lure: 0 }, wood: 0, salt: 0 },
+  hasAlarm: false, alarmHour: -1,
+  bagCap: 15, fridgeType: 0, bedLevel: 0,
+  fishBag: [], coldBag: [], frozenBag: [], treasureBag: [], dryFishBag: [],
+  isBadEnd: false, introDone: false,
+  violations: 0,
+  classAttended: [false, false, false, false, false, false],
+  attendedDayKey: -1,
+  lastBeatenDayKey: -1,
+  inkPenalty: { stacks: 0, loc: null, until: 0 },
+  caughtRecords: {},
+  lastRunDayKey: -1,
+  hasIcePick: false,
+  takotsukiCount: 0,      // 身上携带的数量
+  takotsukiTank: 0,       // 鱼缸里的数量
+  takotsukiAffinity: 0,   // 亲密度
+  springDrug: 0,          // 春药值
+  takotsukiMet: false,    // 是否初次遇见
+  takotsukiTime: 0,       // 钓上来的时间（用于计算24小时）
+  tankLevel: 0,           // 鱼缸等级(0无, 1初级, 2中级, 3高级)
+  tankCap: 0,             // 鱼缸容量
+  lastPetDay: -1,         // 上次抚摸日期
+  lastFeedDay: -1,        // 上次投喂日期
+  wombEggs: 0,            // 体内章月卵数量
+  wombEggEndTime: 0,      // 卵的孵化倒计时（绝对分钟数）
+  slimeBottles: 0,        // 收集的黏液数量
+  lastSlimeDayKey: -1,    // 上次收集黏液的日期
+  takotsukiEgg: 0,        // 章月卵数量（鱼饵）
+  hasMiniRod: false,      // 是否拥有迷你鱼竿
+  lastNightAttackDayKey: -1, // 上次夜袭的日期（防止一晚多次）
+  lastSqueezeDayKey: -1   // 上次清理春药（取卵/自行处理）的日期，用于日常衰减
+};
+let G = { schStep: 0, isFishing: false, fishState: "idle", pendingFish: null,
+          inClass: false, pendingDetention: false, moving: false, iceBroken: false };
+
+function $(id) { return document.getElementById(id); }
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._timer); t._timer = setTimeout(() => t.classList.remove('show'), 2000); }
+function getWeekdayStr() { return ["周日", "周一", "周二", "周三", "周四", "周五", "周六"][state.weekday]; }
+function getFishSlots(size) { if (size >= 90) return 4; if (size >= 50) return 2; return 1; }
+function getBagUsed() { 
+  // 只计算生鱼和宝物，鱼干在独立背包不计入
+  let fishSlots = state.fishBag.reduce((sum, f) => sum + getFishSlots(f.size), 0);
+  return fishSlots + state.treasureBag.length; 
+}
+function getColdCap() { return state.fridgeType >= 1 ? 15 : 0; }
+function getFrozenCap() { return state.fridgeType === 2 ? 40 : 0; }
+function getColdUsed() { return state.coldBag.reduce((s,f) => s + getFishSlots(f.size), 0); }
+function getFrozenUsed() { return state.frozenBag.reduce((s,f) => s + getFishSlots(f.size), 0); }
+function getDayKey() { return state.month * 30 + state.day; }
+
+function getSeasonByMonth(month) {
+  if (month >= 3 && month <= 5) return "spring";
+  if (month >= 6 && month <= 8) return "summer";
+  if (month >= 9 && month <= 11) return "autumn";
+  return "winter";
+}
+function rollMainWeather() {
+  let roll = rnd(1, 100); let season = state.season;
+  addLog(`[天气-主判定] 掷出 1d100 = ${roll}`, "log-dice");
+  if (season === "winter") {
+    if (roll <= 40) return "sunny";
+    if (roll <= 70) return "cloudy";
+    if (roll <= 80) return "rain_light";
+    if (roll <= 85) return "rain_heavy";
+    return "snow";
+  } else {
+    if (roll <= 40) return "sunny";
+    if (roll <= 75) return "cloudy";
+    if (roll <= 95) return "rain_light";
+    return "rain_heavy";
+  }
+}
+function checkWeatherNode(period) {
+  let roll = rnd(1, 100);
+  addLog(`[天气-节点] ${period} 掷出 1d100 = ${roll}`, "log-dice");
+  
+  if (roll <= 75) {
+    state.weather = state.mainWeather;
+    state.thunderStart = -1; state.thunderEnd = -1;
+    addLog(`[天气-节点] 1-75，回归主天气：${WEATHER_NAMES[state.weather]}`, "log-sys");
+  } else {
+    // 76-100 触发变动
+    let isFogTime = (period === 'dawn' || period === 'night'); // 只有清晨(00:00)和夜晚(18:00)
+    let isSummerAfternoon = (state.season === 'summer' && period === 'afternoon'); // 夏季下午(12:00)
+    
+    if (isFogTime && roll <= 85) {
+      state.weather = "fog";
+      addLog(`[天气-节点] 76-85，触发变动，变更为【雾】。`, "log-sys");
+    } else if (isSummerAfternoon && roll <= 95) {
+      state.weather = "thunder";
+      // 在 12:00-18:00 之间随机生成雷暴起止时间（时长随机2-3小时）
+      state.thunderStart = rnd(13, 16); 
+      state.thunderEnd = state.thunderStart + rnd(1, 2);
+      addLog(`[天气-节点] 76-95，触发变动，变更为【雷暴】(${state.thunderStart}:00-${state.thunderEnd}:00)。`, "log-sys");
+    } else {
+      // 其余天气平均分配
+      let otherWeathers = ["sunny", "cloudy", "rain_light", "rain_heavy"];
+      if (state.season === "winter") otherWeathers.push("snow");
+      
+      // 剔除主天气
+      otherWeathers = otherWeathers.filter(w => w !== state.mainWeather);
+      // 剔除当前时段的特殊天气
+      if (isFogTime) otherWeathers = otherWeathers.filter(w => w !== "fog");
+      if (isSummerAfternoon) otherWeathers = otherWeathers.filter(w => w !== "thunder");
+      
+      if (otherWeathers.length > 0) {
+        state.weather = otherWeathers[rnd(0, otherWeathers.length - 1)];
+      } else {
+        state.weather = state.mainWeather;
+      }
+      state.thunderStart = -1; state.thunderEnd = -1;
+      addLog(`[天气-节点] 触发变动，随机分配为：${WEATHER_NAMES[state.weather]}`, "log-sys");
+    }
+  }
+}
+
+function updateHUD() {
+  if (!RODS[state.eq.rod] || state.inv.rods[state.eq.rod] <= 0) {
+    for (let k in RODS) { if (state.inv.rods[k] > 0) { state.eq.rod = k; break; } }
+  }
+  if (!LINES[state.eq.line] || state.inv.lines[state.eq.line] <= 0) {
+    for (let k in LINES) { if (state.inv.lines[k] > 0) { state.eq.line = k; break; } }
+  }
+  if (!BAITS[state.eq.bait] || state.inv.baits[state.eq.bait] <= 0) {
+    for (let k in BAITS) { if (state.inv.baits[k] > 0) { state.eq.bait = k; break; } }
+  }
+  $('hudMoney').textContent = state.money; 
+  if (state.money >= 100000) { $('hudMoney').style.color = "var(--gold)"; } 
+  else { $('hudMoney').style.color = ""; }
+  $('hudDate').textContent = `${state.month}/${state.day} ${getWeekdayStr()}`;
+  $('hudTime').textContent = `${String(state.hour).padStart(2, '0')}:${String(state.minute).padStart(2, '0')}`;
+  $('hudWeather').textContent = WEATHER_NAMES[state.displayWeather || "sunny"];
+  $('hudDebt').textContent = state.debt; $('stDebtBox').classList.toggle('warn', state.day >= state.nextDebtDay - 2);
+  $('lbl-fatigue').textContent = state.fatigue.toFixed(0); $('bar-fatigue').style.width = state.fatigue + '%';
+  $('lbl-stress').textContent = state.stress.toFixed(0); $('bar-stress').style.width = state.stress + '%';
+  $('lbl-pain').textContent = state.pain.toFixed(0); $('bar-pain').style.width = state.pain + '%';
+  $('lbl-trauma').textContent = state.trauma.toFixed(0); $('bar-trauma').style.width = state.trauma + '%';
+  $('sSci').textContent = state.stats.sci; $('sMath').textContent = state.stats.math; $('sLit').textContent = state.stats.lit; $('sHist').textContent = state.stats.hist; $('sPE').textContent = state.stats.pe;
+  $('sWood').textContent = state.inv.wood; $('sSalt').textContent = state.inv.salt || 0;
+  $('sAlarm').textContent = state.hasAlarm ? "已拥有" : "未拥有";
+  // 章月 HUD 更新
+  if (state.takotsukiCount > 0 || state.takotsukiTank > 0) {
+      $('hudTakotsuki').style.display = 'flex';
+      if (state.takotsukiCount > 0) {
+          // 计算剩余时间（分钟）并向上取整为小时
+          let remainMins = 1440 - ((state.totalMinutes || 0) - state.takotsukiTime);
+          let remainHours = Math.max(0, Math.ceil(remainMins / 60));
+          $('hudTakotsukiText').textContent = `身上${state.takotsukiCount}只 (${remainHours}h)`;
+          // 剩余 6 小时以内变红警告
+          if (remainHours <= 6) {
+              $('hudTakotsuki').classList.add('warn');
+          } else {
+              $('hudTakotsuki').classList.remove('warn');
+          }
+      } else {
+          $('hudTakotsukiText').textContent = `缸中${state.takotsukiTank}/${state.tankCap}只`;
+          $('hudTakotsuki').classList.remove('warn');
+      }
+  } else {
+      $('hudTakotsuki').style.display = 'none';
+  }
+  $('sBed').textContent = "Lv" + (state.bedLevel || 0);
+  if ($('sTakotsukiAffinity')) {
+      $('sTakotsukiAffinity').textContent = state.takotsukiAffinity;
+      $('sSpringDrug').textContent = state.springDrug;
+      // 春药值大于等于60时标红警告
+      if (state.springDrug >= 60) {
+          $('sSpringDrug').style.color = "var(--gold)";
+          $('sSpringDrug').textContent = state.springDrug + " (发情边缘)";
+      } else {
+          $('sSpringDrug').style.color = "var(--red)";
+      }
+  }
+  $('sEqRod').textContent = RODS[state.eq.rod] ? `${RODS[state.eq.rod].name} (${state.inv.rods[state.eq.rod]})` : "无";
+  $('sEqLine').textContent = LINES[state.eq.line] ? `${LINES[state.eq.line].name} (${state.inv.lines[state.eq.line]})` : "无";
+  $('sEqBait').textContent = BAITS[state.eq.bait] ? `${BAITS[state.eq.bait].name} (${state.inv.baits[state.eq.bait]})` : "无";
+  // 冰箱按钮：只在孤儿院显示
+  if ($('btnCold')) $('btnCold').style.display = (state.fridgeType >= 1 && state.loc === "orphanage") ? 'flex' : 'none';
+  if ($('btnFrozen')) $('btnFrozen').style.display = (state.fridgeType === 2 && state.loc === "orphanage") ? 'flex' : 'none';
+  
+  // 每次更新状态自动保存（静默）
+  saveGame();
+}
+
+function addTime(mins) {
+  if (!mins || mins <= 0) return;
+  let prevDayKey = getDayKey();
+  let prevAbs = prevDayKey * 1440 + state.hour * 60 + state.minute;
+  state.totalMinutes = (state.totalMinutes || 0) + mins;
+  state.minute += mins;
+  while (state.minute >= 60) { state.minute -= 60; state.hour++; }
+  while (state.hour >= 24) {
+    state.hour -= 24; state.day++; state.weekday = (state.weekday + 1) % 7;
+    if (state.day > 30) { state.day = 1; state.month++; }
+  }
+  let currDayKey = getDayKey();
+  let currAbs = currDayKey * 1440 + state.hour * 60 + state.minute;
+  for (let dk = prevDayKey; dk <= currDayKey; dk++) {
+    for (let node of [0, 6, 12, 18]) {
+      let nodeAbs = dk * 1440 + node * 60;
+      if (prevAbs < nodeAbs && currAbs >= nodeAbs) {
+        // 严格区分：0点为清晨，6点为上午，12点为下午，18点为夜晚
+        let period = (node === 0) ? "dawn" : (node === 6 ? "morning" : (node === 12 ? "afternoon" : "night"));
+        checkWeatherNode(period);
+      }
+    }
+  }
+  if (currDayKey > prevDayKey) {
+    state.season = getSeasonByMonth(state.month);
+    state.mainWeather = rollMainWeather();
+    addLog(`[天气] 新的一天(${state.month}月${state.day}日)，季节：${state.season}，主天气：${WEATHER_NAMES[state.mainWeather]}`, "log-sys");
+    G.inClass = false; G.pendingDetention = false;
+  }
+  if (state.attendedDayKey !== currDayKey) {
+    state.classAttended = [false, false, false, false, false, false];
+    state.attendedDayKey = currDayKey;
+  }
+  if (state.weather === "thunder" && state.season === "summer") {
+    let ch = state.hour + state.minute / 60;
+    if (ch < state.thunderStart || ch >= state.thunderEnd) state._pendingThunder = true;
+    else state._pendingThunder = false;
+  }
+  if (state._pendingThunder) {
+    let ch = state.hour + state.minute / 60;
+    if (ch >= state.thunderStart && ch < state.thunderEnd) state._pendingThunder = false;
+  }
+  state.displayWeather = state._pendingThunder ? "cloudy" : state.weather;
+  processCheckpoints(prevAbs, currAbs, currDayKey);
+  // 鱼的腐烂进度累积
+  state.fishBag.forEach(f => { if (f.rot !== undefined) f.rot += mins; });
+  state.coldBag.forEach(f => { if (f.rot !== undefined) f.rot += Math.ceil(mins / 3); }); // 冷藏箱里腐烂速度只有 1/3
+  // 受寒惩罚（转化版）
+  // 如果在户外（非孤儿院、学校、咖啡馆、购物中心等室内），且天气恶劣，每小时增加疲劳和压力
+  let isOutdoor = ["forest", "beach", "park", "villa", "market", "museum"].includes(state.loc);
+  let isBadWeather = ["rain_heavy", "snow", "thunder"].includes(state.displayWeather);
+  if (isOutdoor && isBadWeather) {
+      let hours = mins / 60;
+      state.fatigue = clamp(state.fatigue + (4 * hours), 0, 100);
+      state.stress = clamp(state.stress + (2 * hours), 0, 100);
+      // 为了不刷屏，这里不打日志，只做隐性扣减
+  }
+  updateHUD(); checkEvents();
+  if (currDayKey > prevDayKey && state.loc === "orphanage") setTimeout(checkSireiBeating, 0);
+  // 章月卵强制孵化判定
+  if (state.wombEggs > 0 && state.totalMinutes >= state.wombEggEndTime) {
+      let hatched = state.wombEggs;
+      state.wombEggs = 0;
+      state.springDrug = clamp(state.springDrug + 15, 0, 100);
+      addLog(`[孵化] 体内的卵孵化了！`, "log-err");
+      
+      // 延时弹窗，确保它不会被其他事件（如跨天叫醒）覆盖
+      setTimeout(() => {
+          if (state.takotsukiTank + hatched <= state.tankCap) {
+              state.takotsukiTank += hatched;
+              showDialog("体内孵化", "takotsuki", `你突然感到一阵剧烈的痉挛，双腿几乎站不稳。\n\n大腿根处有什么湿滑、细小的东西，正顺着你的腿间一点点挤出来……\n\n${hatched} 只刚孵化的小章鱼钻了出来，吧嗒吧嗒地爬向了鱼缸。`, [
+                  { txt: "虚脱地倒下", fn: () => { closeDialog(); updateHUD(); } }
+              ]);
+          } else {
+              showDialog("体内孵化", "takotsuki", `你突然感到一阵剧烈的痉挛，双腿几乎站不稳。\n\n大腿根处有什么湿滑、细小的东西，正顺着你的腿间一点点挤出来……\n\n但是鱼缸已经满了，${hatched} 只小章鱼只能眷恋地蹭了蹭你的小腿，化作水流回了下水道。`, [
+                  { txt: "松了一口气", fn: () => { closeDialog(); updateHUD(); } }
+              ]);
+          }
+      }, 200);
+  }
+  // 公共场合恶作剧
+  if (state.takotsukiCount > 0 && mins >= 60 && ["school", "cafe", "villa", "mall"].includes(state.loc) && Math.random() < 0.15) {
+      state.springDrug = clamp(state.springDrug + 5, 0, 100);
+      state.stress = clamp(state.stress + 5, 0, 100);
+      addLog(`[恶作剧] 身上的章月突然乱动。`, "log-err");
+      
+      // 使用 setTimeout 让弹窗在时间推进的结算之后显示，防止被覆盖
+      setTimeout(() => {
+          showDialog("公共场合的恶作剧", "takotsuki", `你正在【${LOCATIONS[state.loc].name}】做事，突然感觉到衣服里有什么湿滑柔软的东西在乱爬。\n\n它们顺着你的皮肤游走，专挑敏感的地方触碰。你只能红着脸，死死咬住嘴唇，拼命强装镇定……`, [
+              { txt: "强忍着", fn: () => { closeDialog(); updateHUD(); } }
+          ]);
+      }, 100);
+  }
+  // 章月离水超时判定（1440分钟 = 24小时）
+  if (state.takotsukiCount > 0 && (state.totalMinutes - state.takotsukiTime > 1440)) {
+      state.takotsukiCount = 0;
+      state.takotsukiAffinity = Math.max(0, state.takotsukiAffinity - 20);
+      addLog(`[章月] 因为没有及时补充水分，身上的章月干瘪消失了...`, "log-err");
+      showDialog("章月消失", "none", "由于你太久没有把它们放进水里，黏在你身上的章月慢慢失去了水分，化作一滩水渍消失了……\n\n（亲密度大幅下降）", [
+          { txt: "我真是个糟糕的主人...", fn: () => { closeDialog(); updateHUD(); } }
+      ]);
+  }
+  if (G.pendingDetention) { G.pendingDetention = false; setTimeout(startDetention, 0); }
+}
+
+function processCheckpoints(prevAbs, currAbs, currDayKey) {
+  let firstM = Math.floor(prevAbs / 60) * 60 + 60;
+  for (let M = firstM; M <= currAbs; M += 60) {
+    let mDayKey = Math.floor(M / 1440);
+    let mHour = Math.floor((M % 1440) / 60);
+    let wd = ((state.weekday + (mDayKey - currDayKey)) % 7 + 7) % 7;
+    if (wd < 1 || wd > 5) continue;
+    const startMap = { 9: 0, 10: 1, 11: 2, 13: 4, 14: 5 };
+    if (startMap[mHour] !== undefined) {
+      let idx = startMap[mHour];
+      if (!G.inClass) { state.violations += 1; addLog(`[违纪] ${mHour}:00 ${SCHEDULE[idx].subj}课缺勤，违纪+1。`, "log-err"); }
+      else if (state.classAttended[idx] !== 'done') state.classAttended[idx] = true;
+    }
+    const endMap = { 10: 0, 11: 1, 12: 2, 14: 4, 15: 5 };
+    if (endMap[mHour] !== undefined) {
+      let idx = endMap[mHour];
+      if (state.classAttended[idx] === false) {
+        state.stats[SCHEDULE[idx].stat] = clamp(state.stats[SCHEDULE[idx].stat] - 3, 0, 100);
+        addLog(`[旷课] ${SCHEDULE[idx].subj}课整节缺席，成绩-3。`, "log-err");
+      }
+      state.classAttended[idx] = 'done';
+    }
+    if (mHour === 15 && state.loc === 'school' && !G.moving) G.pendingDetention = true;
+  }
+}
+
+function addStats(f = 0, s = 0, p = 0, t = 0) {
+  state.fatigue = clamp(state.fatigue + f, 0, 100); state.stress = clamp(state.stress + s, 0, 100);
+  state.pain = clamp(state.pain + p, 0, 100); state.trauma = clamp(state.trauma + t, 0, 100);
+  updateHUD();
+  if (state.trauma >= 100) triggerBadEnd("trauma");
+  if (state.stress >= 100) { toast("压力过大，你昏倒了！"); state.stress = 80; addTime(120); }
+}
+function checkEvents() {
+  let todayKey = getDayKey();
+  if (todayKey >= state.nextDebtDay && state.hour >= 8 && !G.debtChecked && state.introDone) { 
+    G.debtChecked = true; 
+    setTimeout(triggerDebtEvent, 500); 
+  }
+  if (todayKey < state.nextDebtDay) G.debtChecked = false;
+
+  // 新增：早上8点后如果在孤儿院且有违纪，且今天还没被打过，则触发责打
+  if (state.loc === "orphanage" && state.violations > 0 && state.hour >= 8 && state.lastBeatenDayKey !== todayKey) {
+    setTimeout(checkSireiBeating, 0);
+  }
+}
+const cv = $('cv'), ctx = cv.getContext('2d');
+let animT = 0;
+function render() {
+  requestAnimationFrame(render); animT += 0.016;
+  let isNight = state.hour >= 18 || state.hour < 6;
+  let skyC1 = isNight ? "#2d3350" : (state.hour < 10 ? "#f6d9b8" : "#cfe6f5");
+  ctx.fillStyle = skyC1; ctx.fillRect(0, 0, 512, 288);
+  if (state.loc === "orphanage") {
+    ctx.fillStyle = "#e0d4c0"; ctx.fillRect(0, 80, 512, 208); ctx.fillStyle = "#8a7050"; ctx.fillRect(40, 140, 120, 148);
+    ctx.fillStyle = "#a4c2f4"; ctx.fillRect(240, 100, 100, 100); ctx.fillStyle = "#c9a06a"; ctx.fillRect(380, 160, 120, 128);
+    if (state.fridgeType >= 1) { ctx.fillStyle = "#f0f0f0"; ctx.fillRect(420, 180, 60, 108); }
+    if (state.fridgeType === 2) { ctx.fillStyle = "#cfe8f0"; ctx.fillRect(400, 180, 18, 108); }
+  } else if (state.loc === "school") {
+    ctx.fillStyle = "#f0f0f0"; ctx.fillRect(0, 60, 512, 228); ctx.fillStyle = "#2e4d3a"; ctx.fillRect(120, 40, 272, 120);
+    for (let r = 0; r < 2; r++) { for (let c = 0; c < 4; c++) { ctx.fillStyle = "#d9b38c"; ctx.fillRect(40 + c * 120, 200 + r * 50, 80, 30); } }
+  } else if (state.loc === "park") {
+    ctx.fillStyle = "#a8d8a0"; ctx.fillRect(0, 110, 512, 178); ctx.fillStyle = "#5a8a5a"; ctx.fillRect(80, 40, 60, 120);
+    ctx.fillStyle = "#5a8a5a"; ctx.fillRect(400, 30, 80, 130); ctx.fillStyle = "#c9a06a"; ctx.fillRect(220, 130, 100, 20);
+  } else if (state.loc === "mall" || state.loc === "market" || state.loc === "hospital" || state.loc === "museum" || state.loc === "villa") {
+    ctx.fillStyle = "#d0d0d0"; ctx.fillRect(0, 40, 512, 248); ctx.fillStyle = "#80b0c0"; ctx.fillRect(180, 100, 160, 188);
+  } else if (state.loc === "beach") {
+    ctx.fillStyle = "#80b0d0"; ctx.fillRect(0, 60, 512, 120); ctx.fillStyle = "#f0e0b0"; ctx.fillRect(0, 180, 512, 108);
+  } else if (state.loc === "forest") {
+    ctx.fillStyle = "#4a8a5a"; ctx.fillRect(0, 60, 512, 228); ctx.fillStyle = "#7cc4a4"; ctx.fillRect(0, 160, 512, 128);
+  } else if (state.loc === "cafe") {
+    ctx.fillStyle = "#f4e6cf"; ctx.fillRect(0, 60, 512, 228); ctx.fillStyle = "#b98d6e"; ctx.fillRect(100, 100, 160, 188);
+    ctx.fillStyle = "#8fbdd1"; ctx.fillRect(320, 80, 120, 100);
+  }
+  if (isNight) { ctx.fillStyle = "rgba(0,0,20,0.5)"; ctx.fillRect(0, 0, 512, 288); }
+}
+
+function buildFishPanelUI() {
+  let rSel = $('eqRod'), lSel = $('eqLine'), bSel = $('eqBait');
+  rSel.innerHTML = ''; lSel.innerHTML = ''; bSel.innerHTML = '';
+  let hasRod = false, hasLine = false, hasBait = false;
+  for(let k in RODS) {
+    if(state.inv.rods[k] > 0) { hasRod = true; let opt = document.createElement('option'); opt.value = k; opt.textContent = `${RODS[k].name}(${state.inv.rods[k]})`; if(state.eq.rod === k) opt.selected = true; rSel.appendChild(opt); }
+  }
+  if(!hasRod) { let opt = document.createElement('option'); opt.value = ""; opt.textContent = "无鱼竿"; rSel.appendChild(opt); }
+  for(let k in LINES) {
+    if(state.inv.lines[k] > 0) { hasLine = true; let opt = document.createElement('option'); opt.value = k; opt.textContent = `${LINES[k].name}(${state.inv.lines[k]})`; if(state.eq.line === k) opt.selected = true; lSel.appendChild(opt); }
+  }
+  if(!hasLine) { let opt = document.createElement('option'); opt.value = ""; opt.textContent = "无鱼线"; lSel.appendChild(opt); }
+  for(let k in BAITS) {
+    if(state.inv.baits[k] > 0) { hasBait = true; let opt = document.createElement('option'); opt.value = k; opt.textContent = `${BAITS[k].name}(${state.inv.baits[k]})`; if(state.eq.bait === k) opt.selected = true; bSel.appendChild(opt); }
+  }
+  if(!hasBait) { let opt = document.createElement('option'); opt.value = ""; opt.textContent = "无鱼饵"; bSel.appendChild(opt); }
+}
+function updateEq() { state.eq.rod = $('eqRod').value; state.eq.line = $('eqLine').value; state.eq.bait = $('eqBait').value; updateHUD(); }
+
+function updateControls() {
+  const c = $('controls'); c.innerHTML = '';
+  if (state.isBadEnd) return;
+  const locInfo = LOCATIONS[state.loc];
+  let isOpen = true;
+  if (locInfo.open !== undefined && locInfo.close !== undefined) { if (state.hour < locInfo.open || state.hour >= locInfo.close) isOpen = false; }
+  if (state.loc === "school" && (state.weekday === 0 || state.weekday === 6)) isOpen = false;
+  if (!isOpen) { const b = document.createElement('button'); b.className = "action-btn ghost"; b.textContent = "这里已经关门了..."; c.appendChild(b); }
+  if (state.loc === "beach" || state.loc === "forest") { if (G.isFishing) $('fish-panel').classList.add('show'); }
+  else { $('fish-panel').classList.remove('show'); G.isFishing = false; }
+  const addBtn = (txt, fn, cls = "") => {
+    if (!isOpen) return;
+    const b = document.createElement('button'); b.className = "action-btn " + cls; b.textContent = txt; b.onclick = fn; c.appendChild(b);
+  };
+  if (state.loc === "orphanage") {
+    addBtn("睡觉", sleepAction);
+    addBtn("制作木竿", () => $('ovCraft').classList.add('show'));
+    // 章月数量调度（每次增减1只）
+    if (state.takotsukiCount > 0) {
+        if (state.tankLevel > 0) {
+            if (state.takotsukiTank < state.tankCap) {
+                addBtn(`🐙 放回鱼缸 1只 (身上${state.takotsukiCount}/缸中${state.takotsukiTank})`, () => {
+                    state.takotsukiCount -= 1;
+                    state.takotsukiTank += 1;
+                    toast("一只章月游进了鱼缸。");
+                    updateHUD(); updateControls();
+                }, "cold");
+            } else {
+                addBtn(`🐙 鱼缸已满 (${state.takotsukiTank}/${state.tankCap})`, () => toast("鱼缸装不下了，去购物中心升级吧！"), "ghost");
+            }
+        } else {
+            addBtn("🐙 需要买鱼缸", () => toast("去购物中心买一个鱼缸才能养它们。"), "ghost");
+        }
+    }
+    if (state.takotsukiTank > 0) {
+        addBtn(`🐙 取出携带 1只 (身上${state.takotsukiCount}/缸中${state.takotsukiTank})`, () => {
+            state.takotsukiTank -= 1;
+            state.takotsukiCount += 1;
+            if (state.takotsukiCount === 1) {
+                state.takotsukiTime = state.totalMinutes; // 只有从0变1时，才重置离水时间（因为之前在水里）
+                if (state.takotsukiAffinity === 0) state.takotsukiAffinity = 10;
+            }
+            toast("一只章月黏在了你身上。");
+            updateHUD(); updateControls();
+        }, "freeze");
+    }
+    // 科学取卵
+    if (state.wombEggs > 0) {
+        addBtn(`🧪 科学取卵 (${state.wombEggs}枚)`, () => {
+            addTime(10);
+            let target = state.stats.sci - (state.wombEggs * 5);
+            let roll = rnd(1, 100);
+            if (roll <= target) {
+                state.springDrug = Math.max(0, state.springDrug - 10);
+                state.takotsukiEgg += state.wombEggs; // 产出章月卵
+                addLog(`[取卵] 科学检定成功，安全取出 ${state.wombEggs} 枚卵。`, "log-ok");
+                state.wombEggs = 0;
+                toast(`成功取出卵，获得【章月卵】×${state.takotsukiEgg}！`);
+            } else {
+                state.springDrug = clamp(state.springDrug + 5, 0, 100);
+                state.wombEggEndTime -= 1440; // 倒计时减1天
+                addStats(0, 15, 10);
+                addLog(`[取卵] 检定失败，卵被推向了更深处，倒计时缩短！`, "log-err");
+                toast("手滑了！卵被推向了深处，倒计时缩短了。");
+            }
+            updateHUD(); updateControls();
+        }, "danger");
+    }
+    // 收集黏液（降春药，换钱）
+    if (state.springDrug >= 10) {
+        addBtn("🧪 收集黏液 (10m)", () => {
+            if (state.lastSlimeDayKey === getDayKey()) {
+                toast("今天身体已经恢复得差不多了，明天再收集吧。");
+                return;
+            }
+            showDialog("收集", "none", "你红着脸，躲进洗手间，用玻璃瓶收集了体内残存的黏液……身体里的燥热稍微退去了一些。", [
+                { txt: "收集完毕", fn: () => {
+                    closeDialog();
+                    state.lastSlimeDayKey = getDayKey();
+                    addTime(10);
+                    addStats(2, -5);
+                    state.springDrug = Math.max(0, state.springDrug - 10);
+                    state.slimeBottles += 1;
+                    addLog(`[收集] 消耗10分钟，春药值-10，获得1瓶黏液。`, "log-ok");
+                    toast("春药值下降了，获得 1 瓶【章月黏液】。");
+                    updateHUD();
+                }}
+            ]);
+        }, "ghost");
+    }
+    // 章月互动面板 (只要有鱼缸里或身上的就能互动)
+    if (state.takotsukiCount > 0 || state.takotsukiTank > 0) {
+      addBtn("🐙 章月互动", () => {
+         let totalCount = state.takotsukiCount + state.takotsukiTank;
+         let currentDay = getDayKey();
+         
+         let intro = state.takotsukiMet && state.takotsukiAffinity > 0 ? "" : "";
+         if (state.takotsukiAffinity >= 20 && !state.takotsukiMet2) {
+             // 这里可以留个后手，如果你以后想加二次认知文本
+         }
+         let drugText = "正常";
+         if (state.springDrug >= 90) drugText = "濒临发情，双腿发软";
+         else if (state.springDrug >= 70) drugText = "重度成瘾，身体极度敏感";
+         else if (state.springDrug >= 50) drugText = "轻度成瘾，有些燥热";
+         else if (state.springDrug >= 30) drugText = "微微发热";
+         showDialog("章月", "takotsuki", `当前共有：${totalCount} 只（身上 ${state.takotsukiCount} / 鱼缸 ${state.takotsukiTank}）。\n亲密度：${state.takotsukiAffinity}/100\n💊 春药值：${state.springDrug}/100 (${drugText})\n\n你要做什么？`, [
+             { txt: "喂食 (每日1次, 减压)", fn: () => { 
+                 if (state.lastFeedDay === currentDay) { toast("今天已经喂过了。"); return; }
+                 state.lastFeedDay = currentDay;
+                 addTime(30); 
+                 state.takotsukiAffinity = clamp(state.takotsukiAffinity + 2, 0, 100); 
+                 addStats(0, -5); // 减压5点
+                 toast("章月开心地吃完了，你看着它们，压力减轻了。"); closeDialog(); updateHUD(); 
+             }},
+             { txt: "抚摸 (每日1次, 减压)", fn: () => { 
+                 if (state.lastPetDay === currentDay) { toast("今天已经摸过了。"); return; }
+                 state.lastPetDay = currentDay;
+                 addTime(10); 
+                 state.takotsukiAffinity = clamp(state.takotsukiAffinity + 1, 0, 100); 
+                 addStats(0, -5); // 减压5点
+                 toast("触感Q弹湿滑，你感觉心情好多了。"); closeDialog(); updateHUD(); 
+             }},
+             { txt: "关掉", fn: closeDialog }
+         ]);
+      }, "ghost");
+    }
+    if (state.money >= 100000) {
+      addBtn("💸 买断债务（10万）", triggerTrueEnd, "danger");
+    }
+    if (state.hasAlarm) addBtn(`闹钟设定 (${state.alarmHour === -1 ? '关' : state.alarmHour + '点'})`, () => {
+      let h = prompt("请输入闹钟时间 (0-23)，输入-1关闭闹钟", state.alarmHour);
+      if (h !== null) { let val = parseInt(h); if (val >= 0 && val <= 23) state.alarmHour = val; else if (val === -1) state.alarmHour = -1; updateControls(); }
+    });
+  }
+  if (state.loc === "school" && state.weekday >= 1 && state.weekday <= 5) {
+    const curMins = state.hour * 60 + state.minute;
+    if (curMins >= 7 * 60 && curMins < 9 * 60) {
+      addBtn("去教室等待上课", startSchool, "danger");
+    } else if (curMins >= 9 * 60 && curMins < 15 * 60) {
+      addBtn("去教室（迟到了）", chooseLateSchool, "danger");
+    }
+  }
+  if (state.loc === "park") {
+    addBtn("跑步 (1h)", () => {
+      let currentDay = getDayKey();
+      
+      // 判定今天是否已经跑过
+      if (state.lastRunDayKey === currentDay) {
+        addLog(`[训练-跑步] 今天已经训练过了，再跑会拉伤肌肉，没有获得提升。`, "log-err");
+        toast("今天已经训练过了，肌肉酸痛...");
+        return; // 直接拦截，连时间都不消耗
+      }
+
+      addTime(60);
+      addStats(8, 0); // 疲劳稍微给多一点，毕竟全力跑1小时
+      
+      let pe = state.stats.pe;
+      if (pe >= 100) {
+        addLog(`[训练-跑步] 体育已达极限，无需再练。`, "log-err");
+        toast("体育已经满级了！");
+        state.lastRunDayKey = currentDay; // 满了也记录
+        updateHUD();
+        return;
+      }
+
+      // 越低越容易成长（目标 = 100 - 当前体育）
+      let chance = 100 - pe;
+      let roll = rnd(1, 100);
+      state.lastRunDayKey = currentDay; // 记录今天已训练
+
+      if (roll <= chance) {
+        state.stats.pe = clamp(state.stats.pe + 1, 0, 100);
+        addLog(`[训练-跑步] 判定成功 (掷出 ${roll} ≤ 目标 ${chance})，体育 +1。当前体育：${state.stats.pe}`, "log-ok");
+        toast(`突破极限！体育 +1 (当前 ${state.stats.pe})`);
+      } else {
+        addLog(`[训练-跑步] 判定失败 (掷出 ${roll} > 目标 ${chance})，未获得提升。`, "log-err");
+        toast("练得满头大汗，但并没有进步...");
+      }
+      updateHUD(); // 强制刷新面板
+    });
+    
+    addBtn("散步 (30m)", () => { 
+      addTime(30); 
+      addStats(1, -3); 
+      toast("压力降低了"); 
+    });
+  }
+  if (state.loc === "mall") addBtn("逛商店", () => { buildShop(); $('ovShop').classList.add('show'); });
+  if (state.loc === "market") {
+    addBtn("卖鱼", sellAllFish);
+    addBtn("讨要废弃鱼线 (30m)", () => {
+      addTime(30); let res = checkSkill(state.stats.lit);
+      if (res.level !== "失败") { state.inv.lines.nylon += rnd(1, 2); toast(`国文${res.txt} 讨要到了废弃鱼线。`); }
+      else { toast("国文检定失败，老板把你赶走了。"); }
+      updateHUD();
+    });
+  }
+  if (state.loc === "hospital") {
+    addBtn("治疗疼痛 (50元)", () => { if (state.money >= 50) { state.money -= 50; state.pain = 0; toast("疼痛完全恢复了"); updateHUD(); } });
+    addBtn("心理咨询 (100元)", () => { if (state.money >= 100) { state.money -= 100; addStats(0, -20, 0, -10); toast("创伤和压力减轻了"); updateHUD(); } });
+    addBtn("找面影歪医生", openDoctor, "danger");
+  }
+  if (state.loc === "museum") {
+    addBtn("卖宝物", sellAllTreasures);
+    addBtn("卖变异鱼标本", sellMutatedSpecimens);
+  }
+  if (state.loc === "beach" || state.loc === "forest") {
+    // 放生按钮
+    if (state.takotsukiCount > 0) {
+        addBtn("放生携带的章月", () => {
+            showDialog("放生", "takotsuki", "你要把身上的章月放回这片水域吗？\n\n（放生会降低亲密度）", [
+                { txt: "确认放生", cls: "danger", fn: () => {
+                    state.takotsukiCount -= 1;
+                    if (state.takotsukiCount <= 0) {
+                        state.takotsukiCount = 0;
+                        state.takotsukiAffinity = 0;
+                        toast("你把手里的章月放回了水里，它带着所有记忆游走了。");
+                    } else {
+                        state.takotsukiAffinity = clamp(state.takotsukiAffinity - 15, 0, 100);
+                        toast("你放生了一只章月，其他的看起来有点委屈。");
+                    }
+                    closeDialog(); updateHUD(); updateControls();
+                }},
+                { txt: "算了", fn: closeDialog }
+            ]);
+        }, "warn");
+    }
+    if (!G.isFishing) {
+      // 冬季森林湖且未破冰
+      if (state.loc === "forest" && state.season === "winter" && !G.iceBroken) {
+          addBtn("🔨 破冰", breakIce, "danger");
+      } else {
+          addBtn("开始钓鱼", () => {
+            G.isFishing = true; G.fishState = "idle"; buildFishPanelUI();
+            $('fishLog').textContent = "水面很平静。"; $('btnFishMain').textContent = "抛 竿"; updateControls();
+          }, "danger");
+      }
+    } else {
+      addBtn("结束钓鱼", () => { G.isFishing = false; G.fishState = "idle"; G.pendingFish = null; updateControls(); }, "ghost");
+    }
+  }
+  if (state.loc === "forest") {
+    addBtn("挖蚯蚓 (30m)", () => { addTime(30); addStats(2, 0); state.inv.baits.worm += 10; toast("挖到10根蚯蚓。"); updateHUD(); if (G.isFishing) buildFishPanelUI(); });
+    addBtn("捡树枝 (30m)", () => { addTime(30); addStats(2, 0); state.inv.wood += rnd(1,2); toast("捡到一些木材。"); updateHUD(); });
+  }
+  if (state.loc === "cafe") {
+    addBtn("打工：服务员 (1h)", () => {
+      if (state.hour >= 20) { toast("老板：太晚了，我们准备打烊了，明天再来吧。"); return; }
+      addTime(60); 
+      addStats(4, 1); 
+      state.money += 10; 
+      addLog(`[打工] 咖啡馆做服务员 1 小时，获得 10 元。`, "log-ok");
+      toast("辛苦了一小时，赚了 10 元。"); 
+      updateHUD(); 
+      updateControls(); // 刷新按钮防超时
+    });
+  }
+  if (state.loc === "villa") {
+    addBtn("敲门寻找家教需求 (10m)", startTutorSearch);
+  }
+  const dists = DISTANCES[state.loc];
+  if (dists) {
+    for (let k in dists) {
+      if (k === state.loc || !LOCATIONS[k]) continue;
+      let dist = dists[k];
+      const b = document.createElement('button');
+      b.className = "action-btn ghost";
+      b.textContent = `去${LOCATIONS[k].name} (${dist}m)`;
+      b.onclick = () => {
+        G.inClass = false; G.moving = true;
+        addTime(dist);
+        G.moving = false;
+        addStats(dist / 10, dist / 20);
+        state.loc = k; G.isFishing = false; G.fishState = "idle"; G.pendingFish = null;
+        G.iceBroken = false; // 离开水域，冰面重置
+        if (k === "orphanage") checkSireiBeating();
+        updateHUD();  // 移动后刷新 HUD（冰箱按钮显隐）
+        toast(`跋涉了 ${dist} 分钟。`); updateControls();
+      };
+      c.appendChild(b);
+    }
+  }
+}
+function breakIce() {
+  let time = 30;
+  let fat = 6;
+  let msg = "你找了一块石头，开始费力地砸向厚厚的冰面……";
+  // 天气与时段加成
+  let isDay = state.hour >= 6 && state.hour < 18;
+  let isSunny = state.displayWeather === "sunny";
+  if (state.hasIcePick) {
+    time = 15; fat = 3; msg = "你拿出破冰镐，高效地凿开了一个冰洞。";
+  } else if (isSunny && isDay) {
+    time = 15; msg = "阳光让冰面稍微脆弱了一些，你徒手凿开了冰洞。";
+  }
+  // 恶劣天气受寒惩罚（疲劳和压力翻倍）
+  let isBad = ["rain_light", "rain_heavy", "snow", "thunder"].includes(state.displayWeather);
+  if (isBad) {
+    fat *= 2;
+    msg += "\n\n冰冷的雨雪打在你身上，你冻得直打哆嗦。（受寒：疲劳惩罚翻倍）";
+  }
+  addTime(time);
+  addStats(fat, isBad ? 5 : 2);
+  G.iceBroken = true;
+  addLog(`[破冰] 耗时 ${time} 分钟，疲劳 +${fat}。`, "log-sys");
+  showDialog("破冰", "none", msg, [
+    { txt: "破冰完成", fn: () => { closeDialog(); updateControls(); } }
+  ]);
+}
+function startTutorSearch() {
+  if (state.hour < 7 || state.hour >= 21) { toast("你按了很久门铃，但没有人应门，看来都休息了。"); return; }
+  
+  // 扣除敲门寻找的 10 分钟和疲劳
+  addTime(10);
+  addStats(1, 1);
+
+  // 随机抽取一个科目
+  const subjects = [
+    { subj: "科学", stat: "sci" },
+    { subj: "数学", stat: "math" },
+    { subj: "国文", stat: "lit" },
+    { subj: "历史", stat: "hist" }
+  ];
+  let target = subjects[rnd(0, 3)];
+  let myStat = state.stats[target.stat];
+  let wage = 0;
+
+  if (myStat >= 70) wage = 30;
+  else if (myStat >= 50) wage = 15;
+  else if (myStat >= 30) wage = 8;
+  else wage = 0;
+
+  let desc = `你敲开了一家门，对方需要一位【${target.subj}】家教。\n\n`;
+  desc += `你的${target.subj}成绩：${myStat}\n`;
+  
+  if (wage === 0) {
+    desc += `「成绩连30都没有？滚滚滚，别耽误我家孩子！」`;
+    showDialog("寻找家教", "none", desc, [
+      { txt: "找下一家 (10m)", fn: () => { closeDialog(); startTutorSearch(); } },
+      { txt: "算了，今天不教了", fn: () => { closeDialog(); updateControls(); } }
+    ]);
+    return;
+  }
+
+  desc += `对方开出的时薪是：${wage} 元/小时。\n你想接下这份工作吗？`;
+
+  showDialog("寻找家教", "none", desc, [
+    { 
+      txt: `接下这份工作 (1h，赚${wage}元)`, 
+      cls: "danger",
+      fn: () => { 
+        closeDialog(); 
+        doTutorJob(target.subj, wage); 
+      } 
+    },
+    { 
+      txt: "找下一家 (10m)", 
+      cls: "ghost",
+      fn: () => { closeDialog(); startTutorSearch(); } 
+    },
+    { 
+      txt: "今天不教了", 
+      cls: "ghost",
+      fn: () => { closeDialog(); updateControls(); } 
+    }
+  ]);
+}
+
+function doTutorJob(subj, wage) {
+  addTime(60);
+  addStats(4, 2); // 教书也是个体力活
+  state.money += wage;
+  addLog(`[打工] 做家教教了一小时【${subj}】，获得 ${wage} 元。`, "log-ok");
+  toast(`教了一小时书，获得 ${wage} 元。`);
+  updateHUD();
+  updateControls(); // 刷新外部时间与按钮
+}
+
+function getFishStatus(f, storageType) {
+  storageType = storageType || 'bag';
+  if (f.isDried) return { label: "鱼干", mul: 0.8, color: "var(--gold)", fresh: false };
+  if (f.frozen || storageType === 'frozen') return { label: "冰鲜", mul: 0.9, color: "var(--accent2)", fresh: true };
+  
+  if (f.rot === undefined) f.rot = (state.totalMinutes || 0) - (f.time || 0); // 兼容老存档
+  
+  if (f.rot <= 1440) {
+    return { label: storageType === 'cold' ? "冷藏" : "新鲜", mul: 1.0, color: "var(--accent)", fresh: true };
+  } else if (f.rot <= 2880) {
+    return { label: "半价", mul: 0.5, color: "var(--dim)", fresh: false };
+  } else {
+    return { label: "腐烂", mul: 0, color: "var(--red)", fresh: false };
+  }
+}
+function getFishShelfLifeText(f, storageType) {
+  if (f.isDried) return "永久保存";
+  if (f.frozen || storageType === 'frozen') return "冰鲜 (永久保存)";
+  
+  let rot = f.rot !== undefined ? f.rot : ((state.totalMinutes || 0) - (f.time || 0));
+  let remainRot = 2880 - rot; // 2880 是彻底腐烂的临界点
+  
+  if (remainRot <= 0) return "已腐烂";
+  
+  // 如果是冷藏，时间流速是常温的 1/3，所以实际剩余时间要乘以 3
+  let actualRemainMins = storageType === 'cold' ? remainRot * 3 : remainRot;
+  
+  // 判断当前状态
+  let stateLabel = "";
+  if (rot <= 1440) stateLabel = storageType === 'cold' ? "冷藏中" : "新鲜中";
+  else stateLabel = "半价中";
+  
+  let hours = Math.floor(actualRemainMins / 60);
+  let days = Math.floor(hours / 24);
+  hours = hours % 24;
+  
+  let timeStr = "";
+  if (days > 0) timeStr += `${days}天`;
+  if (hours > 0 || days === 0) timeStr += `${hours}小时`;
+  
+  return `${stateLabel} (剩 ${timeStr})`;
+}
+
+function getSeasonBonus(f) {
+  let seasons = f.seasons || [];
+  if (seasons.length === 0) return 1;
+  if (seasons.includes(state.season)) return 1;
+  return 1.3;
+}
+function calcMarketPrice(f) {
+  let base = f.size * f.price;
+  
+  // 规则 1：鱼干固定 80%，不吃任何加成
+  if (f.isDried) return Math.round(base * 0.8);
+  
+  // 规则 2：常规/冰鲜/腐烂状态
+  let st = getFishStatus(f, 'bag');
+  if (st.mul === 0) return 0;
+  
+  // 规则 3：反季加成（冰鲜吃反季）
+  let seasonMul = getSeasonBonus(f);
+  
+  // 规则 4：天气加成（冰鲜不吃天气）
+  let weatherMul = 1.0;
+  if (!f.frozen) { 
+    if (state.displayWeather === "rain_light") weatherMul = 1.1;
+    else if (["rain_heavy", "fog", "snow", "thunder"].includes(state.displayWeather)) weatherMul = 1.3;
+  }
+  
+  return Math.round(base * st.mul * seasonMul * weatherMul);
+}
+
+/* ===================== 鱼篓 UI ===================== */
+function openBag() {
+  const body = $('bagBody'); body.innerHTML = '';
+  $('bagTitle').textContent = `鱼篓 (${getBagUsed()}/${state.bagCap} 格)`;
+  
+  $('bagBottomBar').innerHTML = state.loc === "market"
+    ? '<button class="action-btn" style="flex:1;" onclick="sellAllFish(); openBag();">卖出所有可用渔获</button>'
+    : '';
+  
+  if (state.fishBag.length === 0 && state.treasureBag.length === 0 && (!state.dryFishBag || state.dryFishBag.length === 0)) {
+    body.innerHTML = '<div style="text-align:center;color:var(--dim);padding:20px;">空空如也。</div>';
+    $('ovBag').classList.add('show'); return;
+  }
+  if (state.fishBag.length > 0) {
+    const h = document.createElement('div'); h.innerHTML = '<b>鱼类与水产</b>'; h.style.marginTop = '4px'; body.appendChild(h);
+    state.fishBag.forEach((f, idx) => {
+      let st = getFishStatus(f, 'bag');
+      const d = document.createElement('div'); d.className = "bag-item";
+      const cvs = document.createElement('canvas'); cvs.width = 48; cvs.height = 48;
+      drawFishIcon(cvs.getContext('2d'), f.shape, f.color);
+      d.appendChild(cvs);
+      const info = document.createElement('div'); info.className = "bag-info";
+      let seasonTag = "";
+      if (f.seasons && f.seasons.length > 0) {
+        let isNow = f.seasons.includes(state.season);
+        seasonTag = isNow ? ` · ${SEASON_NAMES[state.season]}限定` : ` · 反季×1.3`;
+      }
+      info.innerHTML = `<b>${f.name}</b> <small>${f.size} cm (${getFishSlots(f.size)}格) · <span style="color:${st.color}">${st.label}</span>${seasonTag}<br><span style="color:var(--dim);">${getFishShelfLifeText(f, 'bag')}</span></small>`;
+      d.appendChild(info);
+      const acts = document.createElement('div'); acts.className = "bag-actions";
+      // 去毒：仅整条河鲀、新鲜、未冷冻、且在孤儿院
+      if (f.name === "河鲀" && st.fresh && !f.frozen) {
+        if (state.loc === "orphanage") {
+          const bProc = document.createElement('button'); bProc.textContent = "去毒(30m)"; bProc.onclick = () => processPuffer(idx); acts.appendChild(bProc);
+        } else {
+          const bProc = document.createElement('button'); bProc.className = "ghost"; bProc.textContent = "需回孤儿院去毒"; bProc.onclick = () => toast("这里没有工具，回孤儿院再处理吧。"); acts.appendChild(bProc);
+        }
+        const bEat = document.createElement('button'); bEat.className = "warn"; bEat.textContent = "生吃"; bEat.onclick = () => eatPufferRaw(idx); acts.appendChild(bEat);
+      }
+      // 做鱼干：内脏不能做
+      if (!f.isDried && st.fresh && f.name !== "河鲀内脏") {
+        const bDry = document.createElement('button'); bDry.className = "ghost"; bDry.textContent = "做鱼干"; bDry.onclick = () => craftDriedFish(idx); acts.appendChild(bDry);
+      }
+      // 放入冷藏/冷冻（仅在孤儿院）
+      if (state.loc === "orphanage") {
+        if (getColdCap() > 0 && getColdUsed() + getFishSlots(f.size) <= getColdCap()) {
+          const bC = document.createElement('button'); bC.className = "cold"; bC.textContent = "→冷藏"; bC.onclick = () => { state.coldBag.push(f); state.fishBag.splice(idx, 1); openBag(); }; acts.appendChild(bC);
+        }
+        if (getFrozenCap() > 0 && getFrozenUsed() + getFishSlots(f.size) <= getFrozenCap()) {
+          const bF = document.createElement('button'); bF.className = "freeze"; bF.textContent = "→冷冻"; bF.onclick = () => { f.frozen = true; state.frozenBag.push(f); state.fishBag.splice(idx, 1); openBag(); }; acts.appendChild(bF);
+        }
+      }
+      // 售卖 / 丢弃
+      const isMarketRejected = f.name.includes("河鲀") && !f.name.includes("无毒");
+      if (isMarketRejected) {
+        const bWarn = document.createElement('button'); bWarn.className = "ghost"; bWarn.textContent = "仅面影歪收购"; bWarn.onclick = () => toast("农贸市场不收。去医院找面影歪吧。"); acts.appendChild(bWarn);
+        const bTrash = document.createElement('button'); bTrash.className = "warn"; bTrash.textContent = "丢弃"; bTrash.onclick = () => { state.fishBag.splice(idx, 1); openBag(); }; acts.appendChild(bTrash);
+      } else if (st.mul > 0) {
+        let price = calcMarketPrice(f);
+        if (state.loc === "market") {
+          const bSell = document.createElement('button'); bSell.textContent = `卖 ${price}元`; bSell.onclick = () => sellSingleFish(idx, price, 'bag'); acts.appendChild(bSell);
+        } else {
+          const bSell = document.createElement('button'); bSell.className = "ghost"; bSell.textContent = `${price}元·需去市场`; bSell.onclick = () => toast("必须走到农贸市场才能卖鱼。"); acts.appendChild(bSell);
+        }
+      } else {
+        const bTrash = document.createElement('button'); bTrash.className = "ghost"; bTrash.textContent = "丢弃"; bTrash.onclick = () => { state.fishBag.splice(idx, 1); openBag(); }; acts.appendChild(bTrash);
+      }
+      d.appendChild(acts);
+      body.appendChild(d);
+    });
+  }
+  // 渲染加工品（鱼干）
+  if (state.dryFishBag && state.dryFishBag.length > 0) {
+    const h = document.createElement('div'); h.innerHTML = '<b>加工品（不占空间）</b>'; h.style.marginTop = '8px'; body.appendChild(h);
+    state.dryFishBag.forEach((f, idx) => {
+      const d = document.createElement('div'); d.className = "bag-item";
+      const cvs = document.createElement('canvas'); cvs.width = 48; cvs.height = 48;
+      drawFishIcon(cvs.getContext('2d'), f.shape, f.color);
+      d.appendChild(cvs);
+      const info = document.createElement('div'); info.className = "bag-info";
+      let price = calcMarketPrice(f);
+      info.innerHTML = `<b>${f.name}(鱼干)</b> <small>${f.size} cm · 估价 ${price} 元</small>`;
+      d.appendChild(info);
+      
+      const acts = document.createElement('div'); acts.className = "bag-actions";
+      if (state.loc === "market") {
+        const bSell = document.createElement('button'); bSell.textContent = `卖 ${price}元`; bSell.onclick = () => sellSingleFish(idx, price, 'dry'); acts.appendChild(bSell);
+      } else {
+        const bSell = document.createElement('button'); bSell.className = "ghost"; bSell.textContent = `${price}元·需去市场`; bSell.onclick = () => toast("必须走到农贸市场才能卖。"); acts.appendChild(bSell);
+      }
+      d.appendChild(acts);
+      body.appendChild(d);
+    });
+  }
+
+  if (state.treasureBag.length > 0) {
+    const h = document.createElement('div'); h.innerHTML = '<b>宝物</b>'; h.style.marginTop = '8px'; body.appendChild(h);
+    state.treasureBag.forEach(t => {
+      const d = document.createElement('div'); d.className = "bag-item";
+      const cvs = document.createElement('canvas'); cvs.width = 48; cvs.height = 48;
+      drawTreasureIcon(cvs.getContext('2d'), t.rarity);
+      d.appendChild(cvs);
+      const info = document.createElement('div'); info.className = "bag-info";
+      info.innerHTML = `<b>${t.name}</b> <small>估价 ${t.price} 元 · 需去博物馆卖</small>`;
+      d.appendChild(info);
+      body.appendChild(d);
+    });
+  }
+  $('ovBag').classList.add('show');
+}
+
+/* ===================== 冷藏箱 ===================== */
+function openColdBox() {
+  if (state.loc !== "orphanage") { toast("必须回孤儿院才能操作冰箱。"); return; }
+  $('bagBottomBar').innerHTML = '';
+  const body = $('bagBody'); body.innerHTML = '';
+  $('bagTitle').textContent = `冷藏箱 (${getColdUsed()}/${getColdCap()} 格)`;
+  if (state.coldBag.length === 0) {
+    body.innerHTML = '<div style="text-align:center;color:var(--dim);padding:20px;">冷藏箱里空空的。</div>';
+    $('ovBag').classList.add('show'); return;
+  }
+  state.coldBag.forEach((f, idx) => {
+    let st = getFishStatus(f, 'cold');
+    const d = document.createElement('div'); d.className = "bag-item";
+    const cvs = document.createElement('canvas'); cvs.width = 48; cvs.height = 48;
+    drawFishIcon(cvs.getContext('2d'), f.shape, f.color);
+    d.appendChild(cvs);
+    const info = document.createElement('div'); info.className = "bag-info";
+    info.innerHTML = `<b>${f.name}</b> <small>${f.size} cm (${getFishSlots(f.size)}格) · <span style="color:${st.color}">${st.label}</span><br><span style="color:var(--dim);">${getFishShelfLifeText(f, 'cold')}</span></small>`;
+    d.appendChild(info);
+    const acts = document.createElement('div'); acts.className = "bag-actions";
+    if (getBagUsed() + getFishSlots(f.size) <= state.bagCap) {
+      const bTake = document.createElement('button'); bTake.textContent = "取出"; bTake.onclick = () => { state.fishBag.push(f); state.coldBag.splice(idx, 1); openColdBox(); }; acts.appendChild(bTake);
+    } else {
+      const bTake = document.createElement('button'); bTake.className = "ghost"; bTake.textContent = "鱼篓满了"; bTake.onclick = () => toast("鱼篓空间不足！"); acts.appendChild(bTake);
+    }
+    d.appendChild(acts);
+    body.appendChild(d);
+  });
+  $('ovBag').classList.add('show');
+}
+
+/* ===================== 冷冻箱 ===================== */
+function openFrozenBox() {
+  if (state.loc !== "orphanage") { toast("必须回孤儿院才能操作冰箱。"); return; }
+  $('bagBottomBar').innerHTML = '';
+  const body = $('bagBody'); body.innerHTML = '';
+  $('bagTitle').textContent = `冷冻箱 (${getFrozenUsed()}/${getFrozenCap()} 格)`;
+  if (state.frozenBag.length === 0) {
+    body.innerHTML = '<div style="text-align:center;color:var(--dim);padding:20px;">冷冻箱里空空的。</div>';
+    $('ovBag').classList.add('show'); return;
+  }
+  state.frozenBag.forEach((f, idx) => {
+    let st = getFishStatus(f, 'frozen');
+    const d = document.createElement('div'); d.className = "bag-item";
+    const cvs = document.createElement('canvas'); cvs.width = 48; cvs.height = 48;
+    drawFishIcon(cvs.getContext('2d'), f.shape, f.color);
+    d.appendChild(cvs);
+    const info = document.createElement('div'); info.className = "bag-info";
+    info.innerHTML = `<b>${f.name}</b> <small>${f.size} cm (${getFishSlots(f.size)}格) · <span style="color:${st.color}">${st.label}</span></small>`;
+    d.appendChild(info);
+    const acts = document.createElement('div'); acts.className = "bag-actions";
+    if (getBagUsed() + getFishSlots(f.size) <= state.bagCap) {
+      const bTake = document.createElement('button'); bTake.textContent = "取出"; bTake.onclick = () => { state.fishBag.push(f); state.frozenBag.splice(idx, 1); openFrozenBox(); }; acts.appendChild(bTake);
+    } else {
+      const bTake = document.createElement('button'); bTake.className = "ghost"; bTake.textContent = "鱼篓满了"; bTake.onclick = () => toast("鱼篓空间不足！"); acts.appendChild(bTake);
+    }
+    d.appendChild(acts);
+    body.appendChild(d);
+  });
+  $('ovBag').classList.add('show');
+}
+
+function openDoctor() {
+  if (state.loc !== "hospital") { toast("必须去医院才能找面影歪。"); return; }
+  const body = $('doctorBody'); body.innerHTML = '';
+  let hasGoods = false;
+  state.fishBag.forEach((f, idx) => {
+    let isSeafood = f.tags && f.tags.includes('seafood');
+    let isPuffer = f.name.includes("河鲀");
+    let isOrgans = f.name.includes("内脏");
+    if (isSeafood || isPuffer || isOrgans) {
+      hasGoods = true;
+      let price = 0;
+      let isMutated = f.tags && f.tags.includes('mutated');
+      if (isOrgans) price = Math.round(f.size * 3 + 50);
+      else if (isMutated) {
+        price = Math.round(f.size * f.price * 3 + (f.size >= 90 ? 500 : 0));
+      }
+      else {
+        let st = getFishStatus(f, 'bag');
+        if (st.mul === 0) return;
+        price = Math.round(f.size * f.price * 1.5 * st.mul);
+      }
+      const d = document.createElement('div'); d.className = "bag-item";
+      const cvs = document.createElement('canvas'); cvs.width = 48; cvs.height = 48;
+      drawFishIcon(cvs.getContext('2d'), f.shape, f.color);
+      d.appendChild(cvs);
+      const info = document.createElement('div'); info.className = "bag-info";
+      info.innerHTML = `<b>${f.name}</b> <small>${f.size} cm · 估价 ${price} 元</small>`;
+      d.appendChild(info);
+      const bSell = document.createElement('button'); bSell.className = "btn-sm"; bSell.textContent = `卖出 ${price}元`;
+      bSell.onclick = () => { state.money += price; state.fishBag.splice(idx, 1); toast(`卖出 ${f.name}，获得 ${price} 元。`); updateHUD(); openDoctor(); };
+      d.appendChild(bSell);
+      body.appendChild(d);
+    }
+  });
+  // 收购黏液
+  if (state.slimeBottles > 0) {
+      hasGoods = true;
+      const d = document.createElement('div'); d.className = "bag-item";
+      const info = document.createElement('div'); info.className = "bag-info";
+      let price = 300; // 高价收购
+      info.innerHTML = `<b>章月黏液 ×${state.slimeBottles}</b> <small>特殊样本 · 估价 ${price} 元/瓶</small>`;
+      d.appendChild(info);
+      const bSell = document.createElement('button'); bSell.className = "btn-sm"; bSell.textContent = `全部卖出 (${state.slimeBottles * price}元)`;
+      bSell.onclick = () => {
+          state.money += state.slimeBottles * price;
+          state.slimeBottles = 0;
+          toast(`卖出所有黏液，获得巨款！`);
+          updateHUD(); openDoctor();
+      };
+      d.appendChild(bSell);
+      body.appendChild(d);
+  }
+  if (!hasGoods) body.innerHTML = '<div style="text-align:center;color:var(--dim);padding:20px;">「唉……没有我感兴趣的素材吗？」</div>';  $('ovDoctor').classList.add('show');
+}
+
+function sellSingleFish(idx, price, source) {
+  if (state.loc !== "market") { toast("必须去农贸市场才能卖鱼。"); return; }
+  let bag = source === 'cold' ? state.coldBag : source === 'frozen' ? state.frozenBag : source === 'dry' ? state.dryFishBag : state.fishBag;
+  let f = bag[idx];
+  if (f.name.includes("河鲀") && !f.name.includes("无毒")) { toast("农贸市场拒收河鲀！老板说这玩意有毒，吃了要出人命的。"); return; }
+  state.money += price;
+  bag.splice(idx, 1);
+  toast(`卖出 ${f.name}，获得 ${price} 元。`);
+  updateHUD(); openBag();
+}
+
+function processPuffer(idx) {
+  let f = state.fishBag[idx]; addTime(30); let res = checkSkill(state.stats.sci);
+  if (res.level === "困难成功" || res.level === "极难成功" || res.level === "大成功") {
+    f.name = "无毒的河鲀肉"; f.price = 4.5;
+    if (getBagUsed() + getFishSlots(f.size) <= state.bagCap) {
+      state.fishBag.push({ name: "河鲀内脏", size: f.size, price: 4.5, shape: "organ", color: "#6b2c2c", tags: ["toxic"], time: state.totalMinutes || 0, isDried: false, frozen: false, seasons: f.seasons });
+      toast("去毒成功！获得无毒河鲀肉和内脏。");
+    } else { toast("去毒成功！但背包满了，内脏掉落了。"); }
+  } else {
+    f.name = "被污染的河鲀肉"; f.price = 4.5;
+    toast("手滑了！鱼被污染，只能卖给面影歪。");
+  }
+  updateHUD(); openBag();
+}
+function eatPufferRaw(idx) {
+  state.fishBag.splice(idx, 1); addStats(20, 20, 20, 5); toast("你生吃了河鲀，嘴唇发麻...");
+  showDialog("中毒", "none", "你感觉全身麻痹，呼吸变得困难。", [{txt: "陷入昏迷", fn: () => { closeDialog(); addTime(240); openBag(); }}]);
+}
+function craftDriedFish(idx) {
+  if (!state.inv.salt || state.inv.salt <= 0) { toast("没有粗盐。"); return; }
+  state.inv.salt--; addTime(120); 
+  let f = state.fishBag[idx];
+  f.isDried = true;
+  f.time = state.totalMinutes; 
+  
+  state.fishBag.splice(idx, 1); // 从鱼篓移除
+  state.dryFishBag.push(f);     // 放入独立鱼干背包
+  
+  toast(`制作了【${f.name}（鱼干）】，已放入物资栏！`);
+  updateHUD(); openBag();
+}
+function sellAllFish() {
+  if (state.loc !== "market") { toast("必须去农贸市场才能卖鱼。"); return; }
+  let total = 0, count = 0, rejected = 0;
+  state.fishBag.forEach(f => {
+    if (f.name.includes("河鲀") && !f.name.includes("无毒")) { rejected++; return; }
+    let price = calcMarketPrice(f);
+    if (price > 0) { total += price; count++; }
+  });
+  if (count === 0 && rejected === 0) { toast("没有可卖的鱼。"); return; }
+  let res = checkSkill(state.stats.math);
+  let finalMoney = Math.round(total * res.mul);
+  state.money += finalMoney;
+  state.fishBag = state.fishBag.filter(f => calcMarketPrice(f) === 0 || (f.name.includes("河鲀") && !f.name.includes("无毒")));
+  
+  // 把鱼干也算进批量出售里
+  if (state.dryFishBag && state.dryFishBag.length > 0) {
+      state.dryFishBag.forEach(f => {
+          let price = calcMarketPrice(f);
+          if (price > 0) { total += price; count++; }
+      });
+      state.dryFishBag = [];
+  }
+  
+  updateHUD();
+  let msg = `卖出 ${count} 条鱼，获得 ${finalMoney} 元。`;
+  if (rejected > 0) msg += ` 但河鲀类被拒收了。`;
+  toast(msg);
+}
+function sellAllTreasures() {
+  if (state.loc !== "museum") { toast("必须去博物馆才能卖宝物。"); return; }
+  if (state.treasureBag.length === 0) { toast("没有宝物。"); return; }
+  let total = 0; state.treasureBag.forEach(t => total += t.price);
+  let res = checkSkill(state.stats.hist); state.money += Math.round(total * res.mul); state.treasureBag = [];
+  updateHUD(); toast(`卖出宝物，获得 ${Math.round(total * res.mul)} 元。`);
+}
+
+function sellMutatedSpecimens() {
+  if (state.loc !== "museum") { toast("必须去博物馆才能卖标本。"); return; }
+  let targets = state.fishBag.filter(f => f.tags && f.tags.includes("mutated") && f.size >= 50);
+  if (targets.length === 0) { toast("没有 50cm 以上的变异鱼可做标本。"); return; }
+  let total = 0, count = 0;
+  state.fishBag = state.fishBag.filter(f => {
+    if (!(f.tags && f.tags.includes("mutated") && f.size >= 50)) return true;
+    let base = f.size >= 90 ? 1000 : 500;
+    if (f.size >= 92) base = Math.round(base * 1.1);  // 变异鱼 min=20 max=100，极品阈值 92
+    total += base;
+    count++;
+    return false;
+  });
+  let res = checkSkill(state.stats.hist);
+  let finalMoney = Math.round(total * res.mul);
+  state.money += finalMoney;
+  updateHUD();
+  toast(`卖出 ${count} 条变异鱼标本，获得 ${finalMoney} 元。`);
+}
+
+function buildShop() {
+  const b = $('shopBody'); b.innerHTML = '';
+  const addRow = (name, price, onBuy, tag="") => {
+    const d = document.createElement('div'); d.className = "list-row";
+    d.innerHTML = `<div><b>${name}</b>${tag?`<small style="color:var(--red)">${tag}</small>`:''}</div><button class="btn-sm" ${state.money<price?'disabled':''}>${price}元</button>`;
+    d.querySelector('button').onclick = () => {
+      if(state.money>=price){ state.money-=price; onBuy(); updateHUD(); if (G.isFishing) buildFishPanelUI(); buildShop(); }
+    };
+    b.appendChild(d);
+  };
+  addRow("普通蚯蚓 ×5", 10, () => state.inv.baits.worm += 5);
+  addRow("特制腥香饵 ×5", 50, () => state.inv.baits.smell += 5);
+  addRow("秘制仿生饵 ×5", 150, () => state.inv.baits.lure += 5);
+  addRow("普通尼龙线 ×1", 10, () => state.inv.lines.nylon++);
+  addRow("高强度碳线 ×1", 50, () => state.inv.lines.carbon++);
+  addRow("简易木竿", 20, () => state.inv.rods.wood++);
+  addRow("玻璃钢竿", 300, () => state.inv.rods.fiberglass++);
+  addRow("碳素海竿", 1000, () => state.inv.rods.carbon_rod++);
+  addRow("粗盐 ×1", 10, () => state.inv.salt = (state.inv.salt || 0) + 1);
+  if (!state.hasIcePick) addRow("破冰镐", 100, () => state.hasIcePick = true, "冬季森林湖必需品");
+  if (!state.hasMiniRod) addRow("迷你鱼竿", 100, () => state.hasMiniRod = true, "给章月玩的");
+  if (!state.hasAlarm) addRow("闹钟", 50, () => state.hasAlarm = true);
+  if (state.fridgeType === 0) addRow("普通冰箱（15格冷藏）", 500, () => { state.fridgeType = 1; }, "自动放在孤儿院");
+  if (state.fridgeType === 1) addRow("高级冰箱（+40格冷冻）", 1500, () => { state.fridgeType = 2; }, "自动放在孤儿院");
+  
+  if (state.bedLevel === 0) addRow("基础被褥套装 (Lv0→1)", 80, () => { state.bedLevel = 1; }, "自动放在孤儿院");
+  if (state.bedLevel === 1) addRow("舒适床垫 (Lv1→2)", 200, () => { state.bedLevel = 2; }, "自动放在孤儿院");
+  if (state.bedLevel === 2) addRow("优质床架+床垫 (Lv2→3)", 500, () => { state.bedLevel = 3; }, "自动放在孤儿院");
+  if (state.bedLevel === 3) addRow("高级寝具全套 (Lv3→4)", 1200, () => { state.bedLevel = 4; }, "自动放在孤儿院");
+  if (state.bedLevel === 4) addRow("顶级定制床铺 (Lv4→5)", 3000, () => { state.bedLevel = 5; }, "自动放在孤儿院");
+  if (state.bagCap < 30) addRow("鱼篓扩容 +5格", 200, () => state.bagCap += 5);
+  if (state.tankLevel === 0) {
+    addRow("初级章月鱼缸 (容量2只)", 80, () => { state.tankLevel = 1; state.tankCap = 2; }, "自动放在孤儿院");
+  } else if (state.tankLevel === 1) {
+    addRow("中级水族箱 (容量4只)", 300, () => { state.tankLevel = 2; state.tankCap = 4; }, "替换初级鱼缸");
+  } else if (state.tankLevel === 2) {
+    addRow("豪华生态缸 (容量6只)", 1000, () => { state.tankLevel = 3; state.tankCap = 6; }, "替换中级水族箱");
+  }
+}
+function craftWoodRod() {
+  if (state.inv.wood <= 0) { toast("没有木材！"); return; }
+  state.inv.wood--; addTime(30); let res = checkSkill(state.stats.sci);
+  if (res.level !== "失败") { state.inv.rods.wood++; toast(`制作了简易木竿！`); }
+  else { toast("科学检定失败，木材损坏了。"); }
+  updateHUD(); if (G.isFishing) buildFishPanelUI(); $('ovCraft').classList.remove('show');
+}
+
+function sleepAction() {
+  let textLog = ""; let hoursSlept = 0;
+  showDialog("睡觉", "none", "你躺下休息了...", [{txt: "确认", fn: () => {
+    closeDialog();
+    
+    // 检查夜袭触发
+    let totalTakotsuki = state.takotsukiCount + state.takotsukiTank;
+    if (totalTakotsuki > 0 && state.lastNightAttackDayKey !== getDayKey()) {
+        let prob = 20 + (state.takotsukiAffinity / 5) + (state.springDrug / 5);
+        prob = Math.min(95, prob);
+        if (rnd(1, 100) <= prob) {
+            state.lastNightAttackDayKey = getDayKey();
+            triggerNightAttack();
+            return; // 中断普通睡眠，进入夜袭结算
+        }
+    }
+    
+    startNormalSleep();
+  }}]);
+}
+
+function triggerNightAttack() {
+  let totalZY = state.takotsukiCount + state.takotsukiTank; // 修复：重新在函数内获取总数
+  
+  showDialog("夜袭", "takotsuki", "半梦半醒间，你感觉有什么湿滑柔软的东西在被窝里蠕动……身体逐渐变得沉重无力。", [
+    { txt: "挣扎反抗 (判定)", fn: () => {
+        closeDialog();
+        let target = state.stats.pe - state.springDrug;
+        let roll = rnd(1, 100);
+        let success = (target > 0 && roll <= target);
+        
+        if (success) {
+            // 成功推开
+            let newAff = Math.max(0, state.takotsukiAffinity - 3);
+            state.takotsukiAffinity = newAff;
+            showDialog("反抗成功", "none", "你咬着牙，一把扯开了缠在腰间的触手。黑暗中的触手停顿了一下，随后委屈地缩了回去。", [
+                { txt: "继续睡", fn: () => { 
+                    closeDialog();
+                    state.springDrug = clamp(state.springDrug + 5, 0, 100);
+                    addStats(5, 2);
+                    addLog(`[夜袭] 成功推开，亲密度-3，春药+5。`, "log-ok");
+                    startNormalSleep();
+                }}
+            ]);
+        } else {
+            // 失败
+            showDialog("反抗失败", "none", "你试图撑起身子，但手脚却软得像一滩水。触手轻易将你按回床铺，湿滑的触感开始向更深处蔓延……", [
+                { txt: "无力承受", fn: () => { 
+                    closeDialog();
+                    // 修复：使用 totalZY
+                    state.springDrug = clamp(state.springDrug + 10 + (totalZY-1)*5, 0, 100);
+                    state.takotsukiAffinity = clamp(state.takotsukiAffinity + 8, 0, 100);
+                    addStats(15, -15);
+                    addLog(`[夜袭] 反抗失败，被折腾了一晚。春药大幅增加。`, "log-err");
+                    checkEggLaying();
+                    startNormalSleep();
+                }}
+            ]);
+        }
+    }},
+    { txt: "迷迷糊糊迎合", cls: "danger", fn: () => {
+        closeDialog();
+        // 修复：使用 totalZY
+        state.springDrug = clamp(state.springDrug + 15 + (totalZY-1)*5, 0, 100);
+        state.takotsukiAffinity = clamp(state.takotsukiAffinity + 10, 0, 100);
+        addStats(10, -25);
+        addLog(`[夜袭] 选择了迎合，亲密度大增，春药值拉满。`, "log-ok");
+        showDialog("放纵", "none", "你干脆放弃了抵抗，甚至主动抱住了其中一只。触手们似乎愣了一下，随后兴奋地钻进了睡衣……", [
+            { txt: "睡去", fn: () => { closeDialog(); checkEggLaying(); startNormalSleep(); } }
+        ]);
+    }}
+  ]);
+}
+function checkEggLaying() {
+  if (state.springDrug >= 60) {
+      let eggCount = rnd(1, 3);
+      state.wombEggs += eggCount;
+      state.wombEggEndTime = state.totalMinutes + 3 * 1440; // 3天倒计时
+      addLog(`[产卵] 体内被注入了 ${eggCount} 枚章月卵，3天内必须取出或孵化。`, "log-err");
+  }
+}
+
+function startNormalSleep() {
+    let textLog = ""; let hoursSlept = 0;
+    while (true) {
+      addTime(60); hoursSlept++;
+      let isWorkDayNow = state.weekday >= 1 && state.weekday <= 5;
+      let forceWake = false; let wakeReason = "";
+      if (state.loc === "orphanage" && isWorkDayNow && state.hour === 7) { forceWake = true; wakeReason = "早上7点，Sirei一脚踹开房门：“滚起来！上学要迟到了！”"; }
+      if (state.hasAlarm && state.alarmHour !== -1 && state.hour === state.alarmHour) { forceWake = true; wakeReason = "闹钟响了，你从睡梦中惊醒。"; }
+      if (!forceWake && state.fatigue <= 0) { forceWake = true; wakeReason = "你睡到自然醒，疲劳完全恢复了。"; }
+      let rec = BED_RECOVERY[state.bedLevel || 0];
+      addStats(rec.fat, rec.stress, 0, rec.trauma);
+      if (forceWake) { textLog = wakeReason; break; }
+      if (hoursSlept > 24) break;
+    }
+    let timeStr = `${String(state.hour).padStart(2, '0')}:${String(state.minute).padStart(2, '0')}`;
+    if (textLog.includes("Sirei")) showDialog("被叫醒", "sirei", textLog, [{txt: "起床", fn: closeDialog}]);
+    else { toast(`睡了 ${hoursSlept} 小时。`); showDialog("醒来", "none", `${textLog}\n当前时间：${timeStr}`, [{txt: "起床", fn: closeDialog}]); }
+    updateControls();
+}
+const SCHEDULE = [
+  { subj: "科学", stat: "sci" }, { subj: "数学", stat: "math" }, { subj: "国文", stat: "lit" },
+  { subj: "午休", stat: "" }, { subj: "历史", stat: "hist" }, { subj: "体育", stat: "pe" }
+];
+
+function startSchool() {
+  G.inClass = true;
+  let cur = state.hour * 60 + state.minute;
+  let starts = [540, 600, 660, 780, 840]; let ends = [600, 660, 720, 840, 900]; let realIdx = [0, 1, 2, 4, 5];
+  for (let i = 0; i < starts.length; i++) { if (cur >= starts[i] && cur < ends[i]) { state.classAttended[realIdx[i]] = true; break; } }
+  if (cur < 540) addTime(540 - cur);
+  G.schStep = 0; nextClass();
+}
+function chooseLateSchool() {
+  showDialog("迟到了", "none", "现在才去教室的话，一定会被记违纪。你要偷偷溜进去吗？", [
+    { 
+      txt: "溜进教室（记1次违纪）", 
+      cls: "danger",
+      fn: () => { closeDialog(); startSchoolLate(); } 
+    },
+    { 
+      txt: "算了，今天不上了", 
+      cls: "ghost",
+      fn: () => { closeDialog(); toast("你决定今天不去教室了。"); } 
+    }
+  ]);
+}
+
+function startSchoolLate() {
+  state.violations += 1;
+  addLog(`[违纪] 迟到进入教室，违纪+1。`, "log-err");
+  G.inClass = true;
+  
+  let cur = state.hour * 60 + state.minute;
+  
+  // 如果正好是午休时间进入
+  if (cur >= 720 && cur < 780) { 
+    addTime(780 - cur); 
+    G.schStep = 4; 
+    nextClass(); 
+    return; 
+  }
+  
+  let starts = [540, 600, 660, 780, 840]; 
+  let ends = [600, 660, 720, 840, 900]; 
+  let realIdx = [0, 1, 2, 4, 5];
+  let i = -1;
+  
+  for (let k = 0; k < starts.length; k++) { 
+    if (cur >= starts[k] && cur < ends[k]) { i = k; break; } 
+  }
+  
+  // 如果已经放学
+  if (i === -1) { 
+    G.schStep = 6; 
+    endSchoolDay(); 
+    return; 
+  }
+  
+  let schIdx = realIdx[i];
+  state.classAttended[schIdx] = true;
+  let remain = ends[i] - cur;
+  let s = SCHEDULE[schIdx];
+  let isHalf = cur <= starts[i] + 30; // 是否在半程之前
+  
+  $('schSubj').textContent = `迟到：${s.subj}课`;
+  $('schDesc').textContent = `你溜进了教室，这节课还剩 ${remain} 分钟。${isHalf ? '还能赶上后半程。' : '已经快下课了。'}`;
+  
+  const opts = $('schOptions'); opts.innerHTML = '';
+  const finishLateClass = () => { 
+    $('ovSchool').classList.remove('show');
+    addTime(remain); 
+    G.schStep = schIdx + 1; 
+    nextClass(); 
+  };
+  
+  const addOpt = (txt, fn) => { 
+    const b = document.createElement('button'); 
+    b.className = "action-btn"; 
+    b.textContent = txt; 
+    b.onclick = fn; 
+    opts.appendChild(b); 
+  };
+  
+  if (isHalf) {
+    addOpt(`认真听课 (+2疲劳 +2压力 +1成绩)`, () => {
+      addStats(2, 2);
+      state.stats[s.stat] = clamp(state.stats[s.stat] + 1, 0, 100);
+      finishLateClass();
+    });
+  } else {
+    addOpt(`努力听讲 (+1疲劳 +1压力 无成绩)`, () => {
+      addStats(1, 1);
+      finishLateClass();
+    });
+  }
+  
+  addOpt(`开小差 (+1疲劳 -1压力)`, () => {
+    addStats(1, -1);
+    finishLateClass();
+  });
+  
+  if (s.subj === "体育") {
+    addOpt("装病请假 (-1成绩)", () => {
+      state.stats[s.stat] = clamp(state.stats[s.stat] - 1, 0, 100);
+      finishLateClass();
+    });
+  } else {
+    addOpt(`上课睡觉 (-2疲劳 -2压力)`, () => {
+      addStats(-2, -2);
+      // 过国文检定
+      let res = checkSkill(state.stats.lit);
+      if (res.level === "失败") { 
+        state.violations++; 
+        toast("国文检定失败，被老师发现你迟到了还在睡觉！违纪+1。"); 
+      } else {
+        toast(`国文${res.txt}，你成功伪装成了认真听讲。`);
+      }
+      finishLateClass();
+    });
+  }
+  
+  $('ovSchool').classList.add('show');
+}
+function nextClass() {
+  if (G.schStep >= SCHEDULE.length) { endSchoolDay(); return; }
+  let s = SCHEDULE[G.schStep];
+  const finishClass = () => { G.schStep++; nextClass(); };
+  if (s.subj === "午休") {
+    $('schSubj').textContent = "午休时间"; $('schDesc').textContent = "有1个小时的休息时间。";
+    const opts = $('schOptions'); opts.innerHTML = '';
+    const addOpt = (txt, fn) => { const b = document.createElement('button'); b.className = "action-btn"; b.textContent = txt; b.onclick = fn; opts.appendChild(b); };
+    addOpt("休息 (疲劳-3, 压力-1)", () => { addTime(60); addStats(-3, -1); finishClass(); });
+    SCHEDULE.forEach(sub => {
+      if (sub.subj === "午休") return;
+      addOpt(`自习${sub.subj}`, () => { addTime(60); addStats(3, 3); state.stats[sub.stat] = clamp(state.stats[sub.stat] + 1, 0, 100); finishClass(); });
+    });
+    $('ovSchool').classList.add('show'); return;
+  }
+  $('schSubj').textContent = `第${G.schStep + 1}节：${s.subj}课`; $('schDesc').textContent = `正在上课。`;
+  const opts = $('schOptions'); opts.innerHTML = '';
+  const addOpt = (txt, fn) => { const b = document.createElement('button'); b.className = "action-btn"; b.textContent = txt; b.onclick = fn; opts.appendChild(b); };
+  addOpt("认真听课 (+3疲劳 +3压力 +2成绩)", () => { addTime(60); addStats(3, 3); state.stats[s.stat] = clamp(state.stats[s.stat] + 2, 0, 100); finishClass(); });
+  addOpt("开小差 (+2疲劳 -2压力)", () => { addTime(60); addStats(2, -2); finishClass(); });
+  if (s.subj === "体育") {
+    addOpt("装病请假 (-3成绩)", () => { addTime(60); state.stats[s.stat] = clamp(state.stats[s.stat] - 3, 0, 100); finishClass(); });
+  } else {
+    addOpt("上课睡觉 (-3疲劳 -3压力 -1成绩)", () => {
+      addTime(60); addStats(-3, -3); state.stats[s.stat] = clamp(state.stats[s.stat] - 1, 0, 100);
+      // 过国文检定（国文越高，演技越好，越不容易被抓）
+      let res = checkSkill(state.stats.lit);
+      if (res.level === "失败") { 
+        state.violations++; 
+        toast("国文检定失败，你睡得太死被老师发现了！违纪+1。"); 
+      } else {
+        toast(`国文${res.txt}，你成功伪装成了认真听讲。`);
+      }
+      finishClass();
+    });
+  }
+  $('ovSchool').classList.add('show');
+}
+function endSchoolDay() {
+  $('ovSchool').classList.remove('show'); G.inClass = false;
+  updateHUD(); updateControls();
+  if (state.violations === 0) toast("放学了。");
+}
+function startDetention() {
+  if (state.isBadEnd) return;
+  let cur = state.hour * 60 + state.minute;
+  let closeMins = 17 * 60;
+  if (cur >= closeMins) { toast("学校已关门，明天再留堂。"); return; }
+  let maxHours = Math.min(2, Math.floor((closeMins - cur) / 60));
+  if (maxHours <= 0) { toast("时间不够留堂，顺延到明天。"); return; }
+  let hours = Math.min(state.violations, maxHours);
+  if (hours <= 0) return;
+  showDialog("留堂", "none", `你需要留堂 ${hours} 小时做义务劳动。（违纪共 ${state.violations} 次，剩余顺延到明天）`, [{ txt: "开始义务劳动", fn: () => {
+    closeDialog();
+    state.violations -= hours;
+    addTime(hours * 60); addStats(hours * 9, hours * 5);
+    updateHUD(); updateControls();
+    if (state.violations > 0) {
+      showDialog("留堂结束", "none", `今天的留堂结束，还有 ${state.violations} 次违纪顺延到明天。`, [{ txt: "知道了", fn: closeDialog }]);
+    }
+  }}]);
+}
+function checkSireiBeating() {
+  let dayKey = getDayKey();
+  let isWorkDay = (state.weekday >= 1 && state.weekday <= 5); // 仅周一至周五
+  
+  if (isWorkDay && state.violations > 0 && state.lastBeatenDayKey !== dayKey) {
+    state.lastBeatenDayKey = dayKey;
+    addStats(0, 5, 10, 0);
+    showDialog("Sirei", "sirei", "「又逃课了是吧？跪下！」Sirei 的皮带狠狠落了下来……", [{ txt: "忍痛", fn: () => { closeDialog(); updateHUD(); } }]);
+  }
+}
+
+function fishMainAction() { if (G.fishState === "idle") castLine(); else if (G.fishState === "bite") strikeFish(); }
+
+function buildFishPool(location, rarity, season, weather, hour) {
+  const pool = [];
+  const fishList = FISH_DB[location] || FISH_DB["forest"];
+  const isNight = (hour < 6 || hour >= 18);
+  for (let fish of fishList) {
+    if (fish.rarity !== rarity) continue;
+    if (fish.seasons && fish.seasons.length > 0 && !fish.seasons.includes(season)) continue;
+    if (fish.tags.includes("night") && !isNight) continue;
+    if (fish.tags.includes("day") && isNight) continue;
+    if (weather === "rain_heavy" && fish.max < 30) continue;
+    if (fish.tags.includes("rain_only") && !["rain_light", "rain_heavy", "thunder"].includes(weather)) continue;
+    if (fish.tags.includes("snow_only") && weather !== "snow") continue;
+    let weight = 1;
+    if (weather === "rain_heavy" && fish.max >= 50) weight *= 2;
+    if (weather === "fog" && fish.tags.includes("predator")) weight *= 2;
+    if (weather === "snow" && fish.tags.includes("snow_only")) weight *= 2;
+    pool.push({ ...fish, weight });
+  }
+  return pool;
+}
+function drawFromPool(pool) {
+  if (pool.length === 0) return null;
+  const totalWeight = pool.reduce((s, f) => s + f.weight, 0);
+  let r = rnd(1, totalWeight), acc = 0;
+  for (let f of pool) { acc += f.weight; if (r <= acc) return f; }
+  return pool[pool.length - 1];
+}
+
+function castLine() {
+  if (getBagUsed() >= state.bagCap) { toast("鱼篓满了，去整理一下吧！"); return; }
+  updateEq();
+  let eq = state.eq;
+  if (!RODS[eq.rod] || state.inv.rods[eq.rod] <= 0) { toast("没有鱼竿！"); return; }
+  if (!LINES[eq.line] || state.inv.lines[eq.line] <= 0) { toast("没有鱼线！"); return; }
+  if (!BAITS[eq.bait] || state.inv.baits[eq.bait] <= 0) { toast("没有鱼饵！"); return; }
+  
+  // 询问是否使用章月卵
+  if (state.takotsukiEgg > 0 && !G.useEggPrompt) {
+      G.useEggPrompt = true;
+      showDialog("使用章月卵？", "takotsuki", `你身上还有 ${state.takotsukiEgg} 枚章月卵。\n它散发的特殊气味能吸引最稀有的鱼类。要使用 1 枚作为鱼饵吗？`, [
+          { txt: "使用 (必定提竿成功)", cls: "danger", fn: () => {
+              state.takotsukiEgg -= 1;
+              G.forceEggBite = true; // 标记这次抛竿使用了卵
+              closeDialog();
+              castLine(); // 重新执行抛竿逻辑
+          }},
+          { txt: "用普通饵就好", fn: () => {
+              G.forceEggBite = false;
+              closeDialog();
+              castLine();
+          }}
+      ]);
+      return;
+  }
+  // 重置标记防死循环
+  let isUsingEgg = G.forceEggBite;
+  G.useEggPrompt = false;
+  G.forceEggBite = false;
+  addLog(`==================== 开始抛竿 ====================`, "log-sys");
+  if (state.displayWeather === "thunder") {
+    let strike = rnd(1, 100);
+    addLog(`[雷暴] 抛竿雷击判定 1d100 = ${strike}`, "log-dice");
+    if (strike <= 15) {
+      addLog(`[雷击] 掷出 ${strike} ≤ 15，被雷劈！`, "log-err");
+      state.pain += 20; state.stress += 10;
+      showDialog("雷击", "none", "一道闪电劈下，你当场昏迷。", [{txt: "醒来", fn: () => { closeDialog(); addStats(0,0,0,5); G.fishState = "idle"; updateHUD(); }}]);
+      return;
+    }
+  }
+  let branch = rnd(1, 100);
+  addLog(`[分岔] 掷出 1D100 = ${branch} → ${branch <= 20 ? '杂物(≤20)' : '渔获(>20)'}`);
+  if (branch <= 20) {
+    addTime(30);
+    addLog(`[杂物] 耗时 30 分钟。未消耗鱼饵，无幸运加成。`, "log-dice");
+    let luckRoll = rollD100(0);
+    addLog(`[杂物-幸运] ${luckRoll.detail} vs 幸运 60`);
+    if (luckRoll.result > 60) {
+      addLog(`[杂物-判定] 失败，打捞到垃圾。`, "log-err");
+      addStats(1.5, 1);
+      $('fishLog').textContent = "你钓上来一团水草和垃圾，只好扔掉了。";
+    } else {
+      let tier = "垃圾"; let price = 0;
+      if (luckRoll.result === 1) { tier = "epic"; price = rnd(500, 999); }
+      else if (luckRoll.result <= 12) { tier = "rare"; price = rnd(200, 400); }
+      else if (luckRoll.result <= 30) { tier = "uncommon"; price = rnd(50, 100); }
+      else { tier = "common"; price = rnd(5, 20); }
+      if (getBagUsed() >= state.bagCap) {
+        addLog(`[杂物-判定] 捞上宝物但鱼篓已满。`, "log-err");
+        $('fishLog').textContent = "捞上东西了，但鱼篓满了装不下！";
+      } else {
+        let nameArr = TREASURE_DB[tier]; let tName = nameArr[rnd(0, nameArr.length - 1)];
+        state.treasureBag.push({ name: tName, price: price, rarity: tier });
+        addLog(`[杂物-判定] 打捞到宝物：【${tName}】 (估价 ${price}元)`, "log-ok");
+        addStats(1.5, -3);
+        $('fishLog').textContent = `捞上来一件【${tName}】！已放入鱼篓。`;
+      }
+    }
+    return;
+  }
+  state.inv.baits[eq.bait]--;
+  buildFishPanelUI(); updateHUD();
+  addLog(`[渔获] 消耗 1 份 ${BAITS[eq.bait].name}。`);
+
+  // 新增：未钓鱼的章月袭击判定
+  let idleTakotsuki = state.takotsukiCount;
+  if (state.hasMiniRod && state.takotsukiCount > 0) {
+      idleTakotsuki -= 1; // 如果有迷你鱼竿，有 1 只在帮忙钓鱼
+  }
+  
+  if (idleTakotsuki > 0) {
+      let attackProb = idleTakotsuki * 5; // 每只未钓鱼的章月加5%概率
+      if (rnd(1, 100) <= attackProb) {
+          addTime(30); // 折腾了半小时
+          state.springDrug = clamp(state.springDrug + (10 * idleTakotsuki), 0, 100);
+          addStats(0, 10);
+          addLog(`[打断] 没在钓鱼的章月突然袭击了你，春药值大幅增加！`, "log-err");
+          
+          showDialog("章月的恶作剧", "takotsuki", `你刚抛出鱼竿，几只没在钓鱼的小章鱼突然顺着你的手臂缠了上来，触手直接钻进了衣服里……\n\n你被折腾得手脚发软，根本没心思看浮标。`, [
+              { txt: "好不容易挣脱", fn: () => { 
+                  closeDialog(); 
+                  $('fishLog').textContent = "你被章月打断了，根本没钓到鱼。"; 
+                  updateHUD(); 
+              }}
+          ]);
+          return; // 强制打断钓鱼，不进入后续咬钩判定
+      }
+  }
+  let luckPool = BAITS[eq.bait].pool;
+  if (state.displayWeather === "rain_light") luckPool += 1;
+  if (state.displayWeather === "rain_heavy" || state.displayWeather === "thunder") luckPool -= 1;
+  let nowM = state.totalMinutes || 0;
+  if (state.inkPenalty && state.inkPenalty.stacks > 0) {
+    const ink = state.inkPenalty;
+    if (ink.loc === state.loc && nowM < ink.until) { luckPool -= ink.stacks; addLog(`[喷墨] 本水域墨汁残留，惩罚骰 -${ink.stacks}（剩余 ${ink.until - nowM} 分钟）。`, "log-dice"); }
+    else if (ink.loc !== state.loc) { addLog(`[喷墨] 已离开喷墨水域，墨汁失效。`, "log-sys"); }
+    else { addLog(`[喷墨] 墨汁已消散。`, "log-sys"); }
+    ink.stacks = 0; ink.loc = null; ink.until = 0;
+  }
+  // 动态计算天气加成，确保日志与实际判定一致
+  let weatherBonus = 0;
+  if (state.displayWeather === "rain_light") weatherBonus = 1;
+  else if (state.displayWeather === "rain_heavy" || state.displayWeather === "thunder") weatherBonus = -1;
+  
+  // 计算章月加成（每只+5）
+  let zyBonus = state.takotsukiCount * 5;
+  let currentLuck = 60 + zyBonus;
+
+  addLog(`[状态] 基础幸运 ${currentLuck} (基础60 + 章月${zyBonus})。鱼饵加成 ${BAITS[eq.bait].pool}，天气加成 ${weatherBonus}。`);
+  let luckCheck = checkLuck(currentLuck, luckPool);
+  addLog(`[渔获-幸运] ${luckCheck.detail} vs 幸运 ${currentLuck} → 【${luckCheck.txt}】`, "log-dice");
+  if (luckCheck.level === "失败") {
+    addTime(30); addStats(1.5, 1);
+    addLog(`[结果] 空军。耗时 30 分钟，压力 +1。`, "log-err");
+    $('fishLog').textContent = "等了很久，浮标毫无动静，空军了。";
+    return;
+  }
+  addTime(luckCheck.wait);
+  addLog(`[时间] ${luckCheck.txt}，耗时 ${luckCheck.wait} 分钟。`, "log-sys");
+  let rarRes = pickRarity(luckCheck.level);
+  // 章月卵特供：稀有度自动提升一级
+  if (isUsingEgg) {
+      if (rarRes.chosen === "common") rarRes.chosen = "uncommon";
+      else if (rarRes.chosen === "uncommon") rarRes.chosen = "rare";
+      else if (rarRes.chosen === "rare") rarRes.chosen = "epic";
+      addLog(`[章月卵] 散发出的奇异气味，将稀有度池强行提升至【${RARITY_NAMES[rarRes.chosen]}】！`, "log-ok");
+  }
+  addLog(`[稀有度池] ${luckCheck.level}池掷骰 ${rarRes.roll} → 前往【${RARITY_NAMES[rarRes.chosen]}】池`, "log-dice");
+  let fishPool = buildFishPool(state.loc, rarRes.chosen, state.season, state.displayWeather, state.hour);
+  if (state.displayWeather === "thunder") {
+    fishPool.push({ name: "雷击变异鱼", min: 20, max: 100, price: 10.0, color: "#e0c080", shape: "normal", rarity: rarRes.chosen, tags: ["mutated", "seafood"], seasons: [], weight: 1 });
+    addLog(`[天气] 雷暴池内追加【雷击变异鱼】(权重1)。`, "log-sys");
+  }
+  if (fishPool.length === 0) {
+    const order = ["epic", "rare", "uncommon", "common"];
+    let startIdx = order.indexOf(rarRes.chosen);
+    if (startIdx < 0) startIdx = 0;
+    for (let i = startIdx + 1; i < order.length; i++) {
+      let tryPool = buildFishPool(state.loc, order[i], state.season, state.displayWeather, state.hour);
+      if (tryPool.length > 0) {
+        fishPool = tryPool;
+        addLog(`[抽鱼] 【${RARITY_NAMES[rarRes.chosen]}】池为空，降级到【${RARITY_NAMES[order[i]]}】池。`, "log-sys");
+        break;
+      }
+    }
+    if (fishPool.length === 0) {
+      const isNight = (state.hour < 6 || state.hour >= 18);
+      fishPool = (FISH_DB[state.loc] || FISH_DB["forest"])
+        .filter(f => !f.seasons || f.seasons.length === 0 || f.seasons.includes(state.season))
+        .filter(f => !(f.tags.includes("night") && !isNight))
+        .filter(f => !(f.tags.includes("day") && isNight))
+        .filter(f => !(f.tags.includes("rain_only") && !["rain_light", "rain_heavy", "thunder"].includes(state.displayWeather)))
+        .filter(f => !(f.tags.includes("snow_only") && state.displayWeather !== "snow"))
+        .map(f => ({ ...f, weight: 1 }));
+      addLog(`[抽鱼] 全稀有度池皆空，使用水域保底池（已过季节/时段/天气）。`, "log-err");
+    }
+  }
+  // 如果已经拥有章月，提前把池子里的章月过滤掉
+  if (state.takotsukiCount > 0) {
+      let filteredPool = fishPool.filter(f => !f.tags || !f.tags.includes("takotsuki"));
+      if (filteredPool.length > 0) {
+          fishPool = filteredPool;
+      } else {
+          // 如果过滤后空了（比如极品池只有章月），降级到普通池保底
+          fishPool = buildFishPool(state.loc, "common", state.season, state.displayWeather, state.hour);
+      }
+  }
+  let fish = drawFromPool(fishPool);
+  let size = rnd(fish.min, fish.max);
+  if (state.displayWeather === "rain_heavy") { size = Math.max(size, 20); addLog(`[天气] 大雨强制尺寸≥20cm。`, "log-sys"); }
+  G.pendingFish = { fish, size };
+  addLog(`[抽鱼] 抽中 ${fish.name} (${size}cm)`, "log-ok");
+  G.fishState = "bite";
+  $('fishLog').textContent = "咬钩了！快提竿！";
+  $('btnFishMain').textContent = "提 竿 !";
+  $('btnFishMain').classList.add('danger');
+}
+
+function strikeFish() {
+  G.fishState = "idle"; $('btnFishMain').textContent = "抛 竿"; $('btnFishMain').classList.remove('danger');
+  if (!G.pendingFish) return;
+  let { fish, size } = G.pendingFish; G.pendingFish = null;
+  addLog(`-------------------- 提竿判定 --------------------`, "log-sys");
+  let peTarget = state.stats.pe;
+  let req = "常规";
+  if (size >= 90) { peTarget = Math.floor(peTarget / 5); req = "极难"; }
+  else if (size >= 50) { peTarget = Math.floor(peTarget / 2); req = "困难"; }
+  else if (size < 20) { addLog(`[体育] 小型鱼免判定。`, "log-sys"); }
+  let pullTime = (size >= 20 && size < 50) ? 10 : 0;
+  if (pullTime > 0) addLog(`[耗时] 普通体型，拉扯额外耗时 10 分钟。`);
+  addTime(pullTime);
+  let pePool = 0;
+  if (state.displayWeather === "rain_heavy" || state.displayWeather === "fog" || state.displayWeather === "snow" || state.displayWeather === "thunder") pePool -= 1;
+  if (state.eq.rod === "fiberglass") pePool += 1;
+  if (state.eq.rod === "carbon_rod") pePool += 1;
+  let success = true;
+  if (size >= 20) {
+    if (state.eq.rod === "carbon_rod") peTarget += 10;
+    let peRoll = rollD100(pePool);
+    success = (peRoll.result <= peTarget);
+    addLog(`[体育] 需【${req}成功】，目标 ≤${peTarget}。${peRoll.detail} → ${success ? '成功' : '失败'}`, success ? "log-ok" : "log-err");
+  }
+  if (success) {
+    // 如果是章月，走特殊逻辑
+    if (fish.tags && fish.tags.includes("takotsuki")) {
+        state.takotsukiCount += 1;
+        state.takotsukiTime = state.totalMinutes; // 记录/刷新离水时间
+        if (state.takotsukiAffinity === 0) state.takotsukiAffinity = 10;
+        addLog(`[奇遇] 钓上了一只灰色小章鱼！已自动携带。`, "log-ok");
+        let desc = "";
+        let title = "";
+        if (!state.takotsukiMet) {
+            desc = "你钓上来一只软趴趴的灰色小章鱼。它用堇色的豆豆眼无辜地看着你，触手紧紧抱着鱼钩不放。\n\n你从没见过这种生物。";
+            title = "奇妙的邂逅";
+            state.takotsukiMet = true;
+        } else {
+            desc = "你又钓上来一只灰色小章鱼。它轻车熟路地顺着鱼线爬到了你身上，似乎早就认识你。";
+            title = "熟悉的触感";
+        }
+        showDialog(title, "takotsuki", desc + "\n\n（它会一直黏在你身上，注意在24小时内把它放到孤儿院的鱼缸里，否则它会干瘪消失！）", [
+            { txt: "由它黏着吧", fn: () => { 
+                closeDialog(); 
+                toast("章月黏在了你身上。"); 
+                updateHUD();
+            }}
+        ]);
+        return; // 直接中断，不进入鱼篓
+    }
+    let codexKey = state.loc + "_" + fish.name;
+    if (!state.caughtRecords) state.caughtRecords = {};
+    if (!state.caughtRecords[codexKey]) {
+      state.caughtRecords[codexKey] = { size: size, count: 1, firstDay: getDayKey() };
+    } else {
+      let rec = state.caughtRecords[codexKey];
+      if (size > rec.size) rec.size = size;
+      rec.count += 1;
+    }
+    let newFish = { name: fish.name, size: size, price: fish.price, shape: fish.shape, color: fish.color, time: state.totalMinutes || 0, rot: 0, isDried: false, tags: fish.tags, seasons: fish.seasons || [], frozen: false };
+    let slots = getFishSlots(size);
+    if (getBagUsed() + slots <= state.bagCap) {
+      state.fishBag.push(newFish);
+      addLog(`[结果] 成功！放入鱼篓。`, "log-ok");
+      $('fishLog').textContent = `成功钓上 ${size}cm 的 ${fish.name}！已放入鱼篓。`;
+    } else {
+      addLog(`[结果] 成功但鱼篓满了，鱼跑了。`, "log-err");
+      $('fishLog').textContent = `钓上一条 ${size}cm 的 ${fish.name}，但鱼篓满了，只好扔掉了...`;
+    }
+    let fat=0, st=0;
+    if(size<20){ fat=0; st=-1; } else if(size<50){ fat=1; st=-2; } else if(size<90){ fat=3; st=-3; } else { fat=8; st=-5; }
+    let isMutated = fish.tags && fish.tags.includes("mutated");
+    if (isMutated) {
+      st += 5;
+      addStats(fat, st, 5, 0);
+      state.inv.lines[state.eq.line] = Math.max(0, state.inv.lines[state.eq.line] - 1);
+      addLog(`[变异] 电击！疼痛+5，压力额外+5，鱼线损毁1根。`, "log-err");
+    } else {
+      addStats(fat, st);
+    }
+    addLog(`[结算] 疲劳+${fat}，压力${st}。`, "log-sys");
+  } else {
+    let extra = ""; let isHeavy = fish.tags && fish.tags.includes('heavy'); let isSeafood = fish.tags && fish.tags.includes('seafood');
+    if (isSeafood) {
+      if (fish.name.includes('蟹') || fish.name.includes('龙虾')) { addStats(0, 0, 5, 0); extra += "【钳伤】疼痛+5。"; }
+      else if (fish.name.includes('章鱼') || fish.name.includes('鱿鱼')) {
+        const nowM = state.totalMinutes || 0;
+        if (!state.inkPenalty) state.inkPenalty = { stacks: 0, loc: null, until: 0 };
+        const ink = state.inkPenalty;
+        if (ink.stacks > 0 && ink.loc === state.loc && nowM < ink.until) ink.stacks += 1;
+        else { ink.stacks = 1; ink.loc = state.loc; }
+        ink.until = nowM + 30;
+        extra += `【喷墨】本水域30分钟内下次抛竿惩罚骰 -${ink.stacks}。`;
+      }
+      else if (fish.name.includes('海胆')) { addStats(0, 5, 10, 0); extra += "【刺伤】疼痛+10，压力+5。"; }
+    }
+    if (isHeavy) {
+      addStats(10, 0, 10, 0); state.inv.lines[state.eq.line] = Math.max(0, state.inv.lines[state.eq.line] - 1); extra += " 【极重】必定断线！";
+      let rBreak = state.eq.rod === 'wood' ? 0.5 : (state.eq.rod === 'fiberglass' ? 0.3 : 0.2);
+      if (Math.random() < rBreak) { state.inv.rods[state.eq.rod] = Math.max(0, state.inv.rods[state.eq.rod] - 1); extra += " 鱼竿折断了！"; }
+      addLog(`[极重] 疲劳+10，疼痛+10，断线！${extra}`, "log-err");
+    } else if (size >= 90) {
+      if (Math.random() < LINES[state.eq.line].breakBig) { state.inv.lines[state.eq.line] = Math.max(0, state.inv.lines[state.eq.line] - 1); extra += " 【特大】鱼线崩断！"; }
+      else {
+        let rBreak = state.eq.rod === 'wood' ? 0.3 : (state.eq.rod === 'fiberglass' ? 0.1 : 0);
+        if (Math.random() < rBreak) { state.inv.rods[state.eq.rod] = Math.max(0, state.inv.rods[state.eq.rod] - 1); extra += " 【特大】鱼竿折断！"; }
+        else extra += " 【特大】线竿保住，鱼跑了。";
+      }
+      addLog(`[特大] 触发断线/断竿判定。${extra}`, "log-err");
+    }
+    let fat=0, st=0;
+    if (size >= 50 && !isHeavy) { fat=5; st=2; } else if (size >= 20 && size < 50) { fat=1; st=1; }
+    let isMutated = fish.tags && fish.tags.includes("mutated");
+    if (isMutated) { st += 5; extra += " 【变异】电击！疼痛+5，压力额外+5。"; }
+    addStats(fat, st, isMutated ? 5 : 0, 0);
+    addLog(`[结果] 脱钩。疲劳+${fat}，压力+${st}。${extra}`, "log-err");
+    $('fishLog').textContent = `一条 ${size}cm 的 ${fish.name} 脱钩跑了... ${extra}`;
+    updateHUD();
+  }
+
+  // 结算章月钓鱼
+  if (state.hasMiniRod && (state.takotsukiCount + state.takotsukiTank) > 0) {
+      if (Math.random() < 0.4) { // 40%概率触发章月事件，避免太刷屏
+          let zLuck = rnd(1, 100);
+          if (zLuck <= 90) { // 幸运90，大概率咬钩
+              let zPe = rnd(1, 100);
+              if (zPe <= 40) { // 体育40，大概率脱钩
+                  addLog(`[章月] 旁边水花四溅，它钓上了一条小鱼，开心地扔进了你的鱼篓。`, "log-ok");
+                  toast("章月帮你钓上了一条鱼！");
+                  // 随机给一条普通鱼
+                  let zFish = FISH_DB[state.loc][0]; 
+                  state.fishBag.push({...zFish, size: rnd(zFish.min, zFish.max), time: state.totalMinutes});
+              } else {
+                  // 被拖下水
+                  addLog(`[章月] 它被大鱼拖进了水里，咕噜咕噜地求救！`, "log-err");
+                  showDialog("章月落水", "takotsuki", "章月被一条巨大的黑影猛地拽向深水，它死死抱着迷你鱼竿，向你投来求助的豆豆眼。", [
+                      { txt: "花5分钟救它", fn: () => {
+                          closeDialog(); addTime(5); state.takotsukiAffinity = clamp(state.takotsukiAffinity + 2, 0, 100);
+                          toast("你把它捞了上来，亲密度 +2。");
+                      }},
+                      { txt: "不管它", fn: () => {
+                          closeDialog();
+                          if (state.takotsukiAffinity >= 60) {
+                              toast("它委屈巴巴地自己爬了上来。");
+                          } else {
+                              if (state.takotsukiCount > 0) state.takotsukiCount -= 1;
+                              else state.takotsukiTank -= 1;
+                              state.hasMiniRod = false;
+                              toast("章月沉了下去...（数量 -1，迷你鱼竿损毁）");
+                          }
+                          updateHUD();
+                      }}
+                  ]);
+              }
+          } else {
+              addLog(`[章月] 它还在那咕噜咕噜地盯着水面，一无所获。`, "log-sys");
+          }
+      }
+  }
+}
+
+function triggerDebtEvent() {
+  if (state.money >= state.debt) {
+    state.money -= state.debt;
+    state.nextDebtDay += 7;
+    state.debtPaidCount++;
+    
+    if (state.debtPaidCount < DEBT_TABLE.length) {
+      state.debt = DEBT_TABLE[state.debtPaidCount];
+    } else {
+      state.debt = 2000;
+    }
+    
+    showDialog("Sirei", "sirei", `「算你识相。下周记得准备好 ${state.debt} 元。」`, [{ txt: "目送他离开", fn: () => { closeDialog(); updateHUD(); } }]);
+  } else {
+    showDialog("催债", "sirei", "「看来你是不打算交钱了？」Sirei 举起了电棍。", [
+      { txt: "反抗", fn: fightSirei, cls: "danger" }, { txt: "认栽", fn: yieldSirei, cls: "ghost" }
+    ]);
+  }
+}
+function fightSirei() {
+  let roll = rnd(1, 100); let target = state.stats.pe * 2;
+  if (roll <= target) {
+    showDialog("反抗成功", "none", "你把 Sirei 揍了一顿。他骂骂咧咧地跑了，债务顺延到下周。", [
+      { txt: "呼...", fn: () => { 
+        state.nextDebtDay += 7; 
+        closeDialog(); 
+        updateHUD(); 
+      } }
+    ]);
+  } else {
+    triggerBadEnd("fight");
+  }
+}
+function yieldSirei() { triggerBadEnd("debt"); }
+
+function triggerTrueEnd() {
+  showDialog("命运的转折", "sirei", "「这……这是十万块？！你一个孤儿，从哪弄来这么多钱？！」Sirei 盯着桌上的一沓钞票，满脸不可置信。", [
+    { txt: "「把钱拿走，别再来烦我。」", fn: () => {
+      state.money -= 100000;
+      state.debt = 0;
+      state.isBadEnd = true; 
+      closeDialog();
+      
+      showDialog("True End · 自由", "none", 
+        "Sirei 抓起钱，灰溜溜地走出了孤儿院。\n\n从今天起，你再也不用为了那点微薄的债务去拼命，再也不用害怕那条皮带。\n\n你走到门外，月都的晨光照在了你的脸上。\n\n——你终于自由了。", 
+        [{ txt: "走向新生活", fn: () => location.reload() }]
+      );
+      updateHUD(); 
+      updateControls();
+    }}
+  ]);
+}
+function triggerBadEnd(type) {
+  state.isBadEnd = true; let title = "Bad End", desc = "";
+  if (type === "debt" || type === "fight") { title = "【Bad End】 被抛弃的人"; desc = "电棍的剧痛让你失去了意识。醒来时，你已经是个奴隶了。"; }
+  else if (type === "trauma") { title = "【Bad End】 破碎的灵魂"; desc = "接连不断的打击摧毁了你的精神，你被送进了精神病院。"; }
+  showDialog(title, "none", desc, [{ txt: "重新开始", fn: () => location.reload() }]); updateControls();
+}
+function showDialog(title, portraitType, text, buttons) {
+  $('dlgTitle').textContent = title;
+  if (portraitType === 'sirei' || portraitType === 'takumi' || portraitType === 'omokage' || portraitType === 'takotsuki') {
+    $('dlgPortraitBox').style.display = 'flex'; drawPortrait(portraitType); $('dlgText').textContent = text; $('dlgBody').textContent = "";
+  } else {
+    $('dlgPortraitBox').style.display = 'none'; $('dlgBody').textContent = text;
+  }
+  const bBox = $('dlgBtns'); bBox.innerHTML = '';
+  buttons.forEach(b => {
+    const btn = document.createElement('button'); btn.className = "action-btn " + (b.cls || ""); btn.textContent = b.txt; btn.onclick = b.fn; bBox.appendChild(btn);
+  });
+  $('ovDialog').classList.add('show');
+}
+function closeDialog() { $('ovDialog').classList.remove('show'); }
+function exportSave() {
+  const data = JSON.stringify(state, null, 2); const blob = new Blob([data], { type: "application/json" });
+  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `save.json`;
+  a.click(); URL.revokeObjectURL(url); toast("存档已导出");
+}
+function importSave(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (data.money !== undefined) {
+        if (data.fridgeBag && !data.coldBag && !data.frozenBag) {
+          let old = data.fridgeBag;
+          if (data.fridgeType === 2) { data.frozenBag = old.map(f => ({...f, frozen: true})); data.coldBag = []; }
+          else { data.coldBag = old; data.frozenBag = []; }
+          delete data.fridgeBag;
+        }
+        state = Object.assign(state, migrateState(data));
+        updateHUD(); updateControls(); toast("存档导入成功");
+        saveGame(); 
+      } else { toast("无效的存档文件"); }
+    } catch (err) { toast("读取存档失败"); }
+  };
+  reader.readAsText(file); e.target.value = '';
+}
+
+// 新增：提取兼容逻辑（加强版）
+function migrateState(data) {
+    if (!data.totalMinutes) data.totalMinutes = 0;
+    if (!data.inv) data.inv = {};
+    if (!data.inv.salt) data.inv.salt = 0;
+    if (!data.fridgeType) data.fridgeType = 0;
+    
+    // 补上之前漏掉的跨月收债日兼容
+    if (data.nextDebtDay < 100) {
+        data.nextDebtDay = (data.month * 30 + data.day) + (data.nextDebtDay - data.day);
+        if (data.nextDebtDay < (data.month * 30 + data.day)) data.nextDebtDay = (data.month * 30 + data.day) + 7;
+    }
+    if (!data.fishBag) data.fishBag = [];
+    if (!data.coldBag) data.coldBag = [];
+    if (!data.frozenBag) data.frozenBag = [];
+    if (!data.treasureBag) data.treasureBag = [];
+    if (!data.dryFishBag) data.dryFishBag = [];
+    if (data.violations === undefined) data.violations = 0;
+    if (!Array.isArray(data.classAttended)) data.classAttended = [false,false,false,false,false,false];
+    if (data.attendedDayKey === undefined) data.attendedDayKey = -1;
+    if (data.lastBeatenDayKey === undefined) data.lastBeatenDayKey = -1;
+    if (!data.inkPenalty) data.inkPenalty = { stacks: 0, loc: null, until: 0 };
+    if (data.lastRunDayKey === undefined) data.lastRunDayKey = -1;
+    if (data.debtPaidCount === undefined) data.debtPaidCount = 0;
+    if (data.bedLevel === undefined) data.bedLevel = 0;
+    if (data.tankLevel === undefined) data.tankLevel = 0;
+    // 强制根据当前版本的 2/4/6 等级上限重新计算，覆盖旧存档的旧数据
+    if (data.tankLevel === 0) data.tankCap = 0;
+    else if (data.tankLevel === 1) data.tankCap = 2;
+    else if (data.tankLevel === 2) data.tankCap = 4;
+    else if (data.tankLevel >= 3) data.tankCap = 6;
+    if (data.takotsukiTank === undefined) data.takotsukiTank = 0;
+    if (data.takotsukiMet === undefined) data.takotsukiMet = false;
+    if (data.takotsukiTime === undefined) data.takotsukiTime = 0;
+    if (data.lastPetDay === undefined) data.lastPetDay = -1;
+    if (data.lastFeedDay === undefined) data.lastFeedDay = -1;
+    if (data.takotsukiMet2 === undefined) data.takotsukiMet2 = false;
+    if (!data.caughtRecords) data.caughtRecords = {};
+    if (data.wombEggs === undefined) data.wombEggs = 0;
+    if (data.wombEggEndTime === undefined) data.wombEggEndTime = 0;
+    if (data.slimeBottles === undefined) data.slimeBottles = 0;
+    if (data.lastNightAttackDayKey === undefined) data.lastNightAttackDayKey = -1;
+    if (data.lastSlimeDayKey === undefined) data.lastSlimeDayKey = -1;
+    if (data.takotsukiEgg === undefined) data.takotsukiEgg = 0;
+    if (data.hasMiniRod === undefined) data.hasMiniRod = false;
+    if (data.hasIcePick === undefined) data.hasIcePick = false;
+    // 处理鱼缸超载：如果旧档鱼缸里的数量大于新容量，超出的部分转移到身上携带
+    if (data.takotsukiTank > data.tankCap) {
+        let overflow = data.takotsukiTank - data.tankCap;
+        data.takotsukiTank = data.tankCap;
+        if (data.takotsukiCount === undefined) data.takotsukiCount = 0;
+        data.takotsukiCount += overflow;
+        data.takotsukiTime = data.totalMinutes || 0; // 重新计算离水时间
+    }
+    return data;
+}
+// 新增：自动保存与读取
+function saveGame() {
+    try {
+        localStorage.setItem('yuedu_save_data', JSON.stringify(state));
+    } catch (e) { console.log("自动保存失败", e); }
+}
+
+function loadGame() {
+  try {
+    let dataStr = localStorage.getItem('yuedu_save_data');
+    if (dataStr) {
+      let data = JSON.parse(dataStr);
+      if (data && data.money !== undefined) {
+        state = Object.assign(state, migrateState(data));
+        return true;
+      }
+    }
+  } catch (e) { console.log("读取自动存档失败", e); }
+  return false;
+}
+
+function init() {
+  // 先尝试读取自动存档
+  let isLoaded = loadGame();
+
+  // 如果没读到存档，且是第一次玩，才初始化天气
+  if (!isLoaded && !state.introDone) {
+    state.season = getSeasonByMonth(state.month);
+    state.mainWeather = rollMainWeather();
+    let h = state.hour; let period = (h >= 6 && h < 12) ? "morning" : (h >= 12 && h < 18 ? "afternoon" : "night");
+    checkWeatherNode(period);
+    state.displayWeather = state.weather;
+  }
+  updateHUD(); updateControls(); render();
+  if (!state.introDone) {
+    showDialog("债务", "sirei", "「记住了，下周日之前，把100元交给我。不然你就给我滚出孤儿院。」", [
+      { txt: "开始挣扎求生", fn: () => { state.introDone = true; closeDialog(); updateControls(); } }
+    ]);
+  }
+}
+init();
+</script>
+</body>
+</html>
