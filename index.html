@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#f4efe3">
-<title>月都孤儿 · 钓鱼生存</title>
+<title>月都孤儿 · 钓鱼生存 v0.2.14（困难模式）</title>
 <style>
   :root {
     --bg: #f4efe3; --panel: #fffdf5; --panel2: #f7f1e1;
@@ -254,6 +254,7 @@
         <div>国文: <b id="sLit">30</b></div>
         <div>历史: <b id="sHist">30</b></div>
         <div>体育: <b id="sPE">50</b></div>
+        <div>难度: <b id="sDiff">普通</b></div>
       </div>
       <hr style="border:0;border-top:1px dashed var(--line);margin:6px 0;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -270,6 +271,9 @@
       <div class="list-row"><span>当前鱼竿</span><span id="sEqRod" style="color:var(--accent);font-weight:bold;">无</span></div>
       <div class="list-row"><span>当前鱼线</span><span id="sEqLine" style="color:var(--accent);font-weight:bold;">无</span></div>
       <div class="list-row"><span>当前鱼饵</span><span id="sEqBait" style="color:var(--accent);font-weight:bold;">无</span></div>
+      <div style="margin-top:6px;">
+        <button class="btn-sm" style="width:100%;background:var(--gold);" onclick="toggleDifficulty()">切换难度（当前：<span id="btnDiffLabel">普通</span>）</button>
+      </div>
       <div style="margin-top:6px;display:flex;gap:6px;">
         <button class="btn-sm" style="flex:1;" onclick="exportSave()">导出存档</button>
         <button class="btn-sm" style="flex:1; background:var(--red);" onclick="if(confirm('确定要彻底删除进度重新开始吗？')){ localStorage.removeItem('yuedu_save_data'); location.reload(); }">删除存档</button>
@@ -410,6 +414,12 @@ const HELP_TEXT = {
 };
 
 function openHelp() {
+  const bp = (state.difficulty === 'hard') ? 500000 : 100000;
+  HELP_TEXT.survival = HELP_TEXT.survival.replace('100,000', bp.toLocaleString());
+  if (state.difficulty === 'hard') {
+    if (!HELP_TEXT.survival.includes('困难模式债务')) HELP_TEXT.survival += '<br><b style="color:var(--red);">困难模式债务</b>：2000之后继续每周+1000，直至10,000封顶。';
+    if (!HELP_TEXT.gear.includes('困难模式物价')) HELP_TEXT.gear += '<br><b style="color:var(--red);">困难模式物价</b>：所有商品×1.5；睡眠恢复×0.75。';
+  }
   switchHelpTab('survival');
   $('ovHelp').classList.add('show');
 }
@@ -851,6 +861,7 @@ let state = {
   bagCap: 15, fridgeType: 0, bedLevel: 0,
   fishBag: [], coldBag: [], frozenBag: [], treasureBag: [], dryFishBag: [],
   isBadEnd: false, introDone: false,
+  difficulty: "normal", // 难度: normal 普通 / hard 困难
   violations: 0,
   classAttended: [false, false, false, false, false, false],
   attendedDayKey: -1,
@@ -977,7 +988,7 @@ function updateHUD() {
     for (let k in BAITS) { if (state.inv.baits[k] > 0) { state.eq.bait = k; break; } }
   }
   $('hudMoney').textContent = state.money; 
-  if (state.money >= 100000) { $('hudMoney').style.color = "var(--gold)"; } 
+  if (state.money >= (state.difficulty === 'hard' ? 500000 : 100000)) { $('hudMoney').style.color = "var(--gold)"; } 
   else { $('hudMoney').style.color = ""; }
   $('hudDate').textContent = `${state.month}/${state.day} ${getWeekdayStr()}`;
   $('hudTime').textContent = `${String(state.hour).padStart(2, '0')}:${String(state.minute).padStart(2, '0')}`;
@@ -1027,6 +1038,11 @@ function updateHUD() {
   $('sEqRod').textContent = RODS[state.eq.rod] ? `${RODS[state.eq.rod].name} (${state.inv.rods[state.eq.rod]})` : "无";
   $('sEqLine').textContent = LINES[state.eq.line] ? `${LINES[state.eq.line].name} (${state.inv.lines[state.eq.line]})` : "无";
   $('sEqBait').textContent = BAITS[state.eq.bait] ? `${BAITS[state.eq.bait].name} (${state.inv.baits[state.eq.bait]})` : "无";
+  // 难度显示
+  const brandEl = document.querySelector('.brand');
+  if (brandEl) brandEl.textContent = state.difficulty === 'hard' ? '月都孤儿·困难' : '月都孤儿';
+  if ($('sDiff')) $('sDiff').textContent = state.difficulty === 'hard' ? '困难' : '普通';
+  if ($('btnDiffLabel')) $('btnDiffLabel').textContent = state.difficulty === 'hard' ? '困难' : '普通';
   // 冰箱按钮：只在孤儿院显示
   if ($('btnCold')) $('btnCold').style.display = (state.fridgeType >= 1 && state.loc === "orphanage") ? 'flex' : 'none';
   if ($('btnFrozen')) $('btnFrozen').style.display = (state.fridgeType === 2 && state.loc === "orphanage") ? 'flex' : 'none';
@@ -1421,8 +1437,9 @@ function updateControls() {
          ]);
       }, "ghost");
     }
-    if (state.money >= 100000) {
-      addBtn("💸 买断债务（10万）", triggerTrueEnd, "danger");
+    const buyoutPrice = state.difficulty === 'hard' ? 500000 : 100000;
+    if (state.money >= buyoutPrice) {
+      addBtn(`💸 买断债务（${buyoutPrice / 10000}万）`, triggerTrueEnd, "danger");
     }
     if (state.hasAlarm) addBtn(`闹钟设定 (${state.alarmHour === -1 ? '关' : state.alarmHour + '点'})`, () => {
       let h = prompt("请输入闹钟时间 (0-23)，输入-1关闭闹钟", state.alarmHour);
@@ -2116,6 +2133,7 @@ function sellMutatedSpecimens() {
 function buildShop() {
   const b = $('shopBody'); b.innerHTML = '';
   const addRow = (name, price, onBuy, tag="") => {
+    if (state.difficulty === 'hard') price = Math.round(price * 1.5); // 困难模式：物价×1.5
     const d = document.createElement('div'); d.className = "list-row";
     d.innerHTML = `<div><b>${name}</b>${tag?`<small style="color:var(--red)">${tag}</small>`:''}</div><button class="btn-sm" ${state.money<price?'disabled':''}>${price}元</button>`;
     d.querySelector('button').onclick = () => {
@@ -2252,11 +2270,12 @@ function startNormalSleep() {
       if (state.hasAlarm && state.alarmHour !== -1 && state.hour === state.alarmHour) { forceWake = true; wakeReason = "闹钟响了，你从睡梦中惊醒。"; }
       if (!forceWake && state.fatigue <= 0) { forceWake = true; wakeReason = "你睡到自然醒，疲劳完全恢复了。"; }
       let rec = BED_RECOVERY[state.bedLevel || 0];
+      let sleepMul = (state.difficulty === 'hard') ? 0.75 : 1.0; // 困难模式：睡眠恢复×0.75
       if (state.drugWithdrawDays > 0) {
-          // 戒断期间睡眠恢复减半
-          addStats(Math.round(rec.fat / 2), rec.stress, 0, rec.trauma);
+          // 戒断期间睡眠恢复减半（困难模式再×0.75）
+          addStats(Math.round(rec.fat / 2 * sleepMul), rec.stress * sleepMul, 0, rec.trauma * sleepMul);
       } else {
-          addStats(rec.fat, rec.stress, 0, rec.trauma);
+          addStats(rec.fat * sleepMul, rec.stress * sleepMul, 0, rec.trauma * sleepMul);
       }
       if (forceWake) { textLog = wakeReason; break; }
       if (hoursSlept > 24) break;
@@ -2861,6 +2880,7 @@ function triggerDebtEvent() {
           state.debtPaidCount++;
           state.debtStrikes = 0;
           if (state.debtPaidCount < DEBT_TABLE.length) state.debt = DEBT_TABLE[state.debtPaidCount];
+          else if (state.difficulty === 'hard') state.debt = Math.min(10000, 2000 + (state.debtPaidCount - DEBT_TABLE.length + 1) * 1000); // 困难模式：第7周后每周+1000，10000封顶
           else state.debt = 2000;
           showDialog("Sirei", "sirei", `「算你识相。下周准备好 ${state.debt} 元。」`, [{ txt: "目送他离开", fn: () => { closeDialog(); updateHUD(); } }]);
       }},
@@ -2929,9 +2949,10 @@ function triggerElectricShock() {
 }
 
 function triggerTrueEnd() {
-  showDialog("命运的转折", "sirei", "「这……这是十万块？！你一个孤儿，从哪弄来这么多钱？！」Sirei 盯着桌上的一沓钞票，满脸不可置信。", [
+  const buyoutPrice = state.difficulty === 'hard' ? 500000 : 100000;
+  showDialog("命运的转折", "sirei", `「这……这是${buyoutPrice / 10000}万块？！你一个孤儿，从哪弄来这么多钱？！」Sirei 盯着桌上的一沓钞票，满脸不可置信。`, [
     { txt: "「把钱拿走，别再来烦我。」", fn: () => {
-      state.money -= 100000;
+      state.money -= buyoutPrice;
       state.debt = 0;
       state.isBadEnd = true; 
       closeDialog();
@@ -3111,6 +3132,7 @@ function migrateState(data) {
     if (data.takotsukiEgg === undefined) data.takotsukiEgg = 0;
     if (data.hasMiniRod === undefined) data.hasMiniRod = false;
     if (data.hasIcePick === undefined) data.hasIcePick = false;
+    if (data.difficulty === undefined) data.difficulty = "normal";
     // 处理鱼缸超载：如果旧档鱼缸里的数量大于新容量，超出的部分转移到身上携带
     if (data.drugAccumulation === undefined) data.drugAccumulation = 0;
     if (data.drugWithdrawDays === undefined) data.drugWithdrawDays = 0;
@@ -3159,10 +3181,23 @@ function init() {
   }
   updateHUD(); updateControls(); render();
   if (!state.introDone) {
-    showDialog("债务", "sirei", "「记住了，下周日之前，把100元交给我。不然你就给我滚出孤儿院。」", [
-      { txt: "开始挣扎求生", fn: () => { state.introDone = true; closeDialog(); updateControls(); } }
+    showDialog("选择难度", "none", "欢迎来到《月都孤儿·钓鱼生存》！\n\n【普通模式】标准规则：债务2000封顶，买断需100,000元。\n\n【困难模式】商店物价×1.5，睡眠恢复×0.75；Sirei的债务在2000之后继续每周+1000（直至10,000封顶），但买断债务只需50,000元。", [
+      { txt: "普通模式", fn: () => { state.difficulty = 'normal'; startIntro(); } },
+      { txt: "困难模式", cls: "danger", fn: () => { state.difficulty = 'hard'; startIntro(); } }
     ]);
   }
+}
+function startIntro() {
+  closeDialog();
+  showDialog("债务", "sirei", "「记住了，下周日之前，把100元交给我。不然你就给我滚出孤儿院。」", [
+    { txt: "开始挣扎求生", fn: () => { state.introDone = true; closeDialog(); updateHUD(); updateControls(); } }
+  ]);
+}
+function toggleDifficulty() {
+  state.difficulty = (state.difficulty === 'hard') ? 'normal' : 'hard';
+  addLog(`[系统] 难度已切换为：${state.difficulty === 'hard' ? '困难' : '普通'}模式`, "log-sys");
+  toast(`已切换为${state.difficulty === 'hard' ? '困难' : '普通'}模式`);
+  updateHUD(); updateControls();
 }
 init();
 </script>
