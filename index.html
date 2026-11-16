@@ -767,12 +767,12 @@ const BAITS = { worm: { name: "普通蚯蚓", pool: 0 }, smell: { name: "特制�
 const DEBT_TABLE = [100, 300, 500, 700, 1000, 1500, 2000];
 
 const BED_RECOVERY = [
-  { fat: -6, stress: -1, trauma: 0 },       // Lv0
-  { fat: -7, stress: -1.5, trauma: 0 },     // Lv1
-  { fat: -8, stress: -2, trauma: -0.3 },    // Lv2
-  { fat: -9.5, stress: -2.5, trauma: -0.5 },// Lv3
-  { fat: -11, stress: -3, trauma: -0.7 },   // Lv4
-  { fat: -13, stress: -3.5, trauma: -1 }    // Lv5
+  { fat: -6, stress: -1, pain: -1, trauma: 0 },       // Lv0
+  { fat: -7, stress: -1.5, pain: -1.5, trauma: 0 },   // Lv1
+  { fat: -8, stress: -2, pain: -2, trauma: -0.3 },    // Lv2
+  { fat: -9.5, stress: -2.5, pain: -2.5, trauma: -0.5 },// Lv3
+  { fat: -11, stress: -3, pain: -3, trauma: -0.7 },   // Lv4
+  { fat: -13, stress: -3.5, pain: -4, trauma: -1 }    // Lv5
 ];
 
 const FISH_DB = {
@@ -857,6 +857,7 @@ let state = {
   inkPenalty: { stacks: 0, loc: null, until: 0 },
   caughtRecords: {},
   lastRunDayKey: -1,
+  debtStrikes: 0,         // 债务违约/反抗失败次数
   hasIcePick: false,
   takotsukiCount: 0,      // 身上携带的数量
   takotsukiTank: 0,       // 鱼缸里的数量
@@ -1095,16 +1096,35 @@ function addTime(mins) {
       state.springDrug = clamp(state.springDrug + 15, 0, 100);
       addLog(`[孵化] 体内的卵孵化了！`, "log-err");
       
-      // 延时弹窗，确保它不会被其他事件（如跨天叫醒）覆盖
+      let isPublic = ["school", "cafe", "villa", "mall"].includes(state.loc);
+      if (isPublic) {
+          state.trauma = clamp(state.trauma + 10, 0, 100);
+          state.stress = clamp(state.stress + 20, 0, 100);
+          state.pain = clamp(state.pain + 10, 0, 100);
+          if (state.loc === "school") state.violations += 2;
+      }
+      
       setTimeout(() => {
-          if (state.takotsukiTank + hatched <= state.tankCap) {
+          // 判断能否进鱼缸
+          if (state.loc === "orphanage" && (state.takotsukiTank + hatched <= state.tankCap)) {
               state.takotsukiTank += hatched;
               showDialog("体内孵化", "takotsuki", `你突然感到一阵剧烈的痉挛，双腿几乎站不稳。\n\n大腿根处有什么湿滑、细小的东西，正顺着你的腿间一点点挤出来……\n\n${hatched} 只刚孵化的小章鱼钻了出来，吧嗒吧嗒地爬向了鱼缸。`, [
                   { txt: "虚脱地倒下", fn: () => { closeDialog(); updateHUD(); } }
               ]);
           } else {
-              showDialog("体内孵化", "takotsuki", `你突然感到一阵剧烈的痉挛，双腿几乎站不稳。\n\n大腿根处有什么湿滑、细小的东西，正顺着你的腿间一点点挤出来……\n\n但是鱼缸已经满了，${hatched} 只小章鱼只能眷恋地蹭了蹭你的小腿，化作水流回了下水道。`, [
-                  { txt: "松了一口气", fn: () => { closeDialog(); updateHUD(); } }
+              // 强制黏在身上
+              state.takotsukiCount += hatched;
+              state.takotsukiTime = state.totalMinutes; // 重置脱水时间
+              
+              let desc = "";
+              if (isPublic) {
+                  desc = `你正在【${LOCATIONS[state.loc].name}】，双腿突然一软，直接跌倒在地。\n\n大腿根处有什么湿滑、细小的东西，当着所有人的面，顺着你的腿间一点点挤了出来……\n\n${hatched} 只刚孵化的小章鱼死死黏在了你的衣服里。你当众失态，大脑一片空白。`;
+              } else {
+                  desc = `你突然感到一阵剧烈的痉挛，双腿几乎站不稳。\n\n大腿根处有什么湿滑、细小的东西，正顺着你的腿间一点点挤出来……\n\n${hatched} 只刚孵化的小章鱼钻了出来，因为没有鱼缸，它们死死黏在了你的衣服里。`;
+              }
+              
+              showDialog("体内孵化", "takotsuki", desc + "\n\n（注意：它们现在黏在你身上，24小时内不回鱼缸就会干瘪！）", [
+                  { txt: isPublic ? "绝望地捂住脸" : "虚脱地倒下", fn: () => { closeDialog(); updateHUD(); } }
               ]);
           }
       }, 200);
@@ -1118,8 +1138,25 @@ function addTime(mins) {
       
       // 使用 setTimeout 让弹窗在时间推进的结算之后显示，防止被覆盖
       setTimeout(() => {
-          showDialog("公共场合的恶作剧", "takotsuki", `你正在【${LOCATIONS[state.loc].name}】做事，突然感觉到衣服里有什么湿滑柔软的东西在乱爬。\n\n它们顺着你的皮肤游走，专挑敏感的地方触碰。你只能红着脸，死死咬住嘴唇，拼命强装镇定……`, [
-              { txt: "强忍着", fn: () => { closeDialog(); updateHUD(); } }
+          showDialog("公共场合的恶作剧", "takotsuki", `你正在【${LOCATIONS[state.loc].name}】做事，突然感觉到衣服里有什么湿滑柔软的东西在乱爬。\n\n它们顺着你的皮肤游走，专挑敏感的地方触碰。你必须拼命强装镇定……`, [
+              { txt: "强忍着 (过国文检定)", fn: () => { 
+                  closeDialog(); 
+                  let target = Math.max(1, state.stats.lit - Math.floor(state.springDrug / 5));
+                  let roll = rnd(1, 100);
+                  if (roll <= target) {
+                      addLog(`[掩饰] 国文检定成功 (掷出 ${roll} <= ${target})，你成功忍住了。`, "log-ok");
+                      toast("你咬破了嘴唇，硬生生忍住了。");
+                  } else {
+                      addLog(`[掩饰] 国文检定失败 (掷出 ${roll} > ${target})，当众失态！`, "log-err");
+                      state.trauma = clamp(state.trauma + 2, 0, 100);
+                      if (state.loc === "school") state.violations++;
+                      addStats(0, 10); // 社死压力增加
+                      showDialog("暴露", "none", "你忍不住发出了一声压抑的闷哼，脸颊红得滴血，引来了周围所有人怪异的目光……\n\n（极度羞耻：创伤+2，压力大增）", [
+                          { txt: "想找个地缝钻进去", fn: () => { closeDialog(); updateHUD(); } }
+                      ]);
+                  }
+                  updateHUD(); 
+              }}
           ]);
       }, 100);
   }
@@ -2146,7 +2183,7 @@ function startNormalSleep() {
       if (state.hasAlarm && state.alarmHour !== -1 && state.hour === state.alarmHour) { forceWake = true; wakeReason = "闹钟响了，你从睡梦中惊醒。"; }
       if (!forceWake && state.fatigue <= 0) { forceWake = true; wakeReason = "你睡到自然醒，疲劳完全恢复了。"; }
       let rec = BED_RECOVERY[state.bedLevel || 0];
-      addStats(rec.fat, rec.stress, 0, rec.trauma);
+      addStats(rec.fat, rec.stress, rec.pain, rec.trauma);
       if (forceWake) { textLog = wakeReason; break; }
       if (hoursSlept > 24) break;
     }
@@ -2347,7 +2384,7 @@ function checkSireiBeating() {
   
   if (isWorkDay && state.violations > 0 && state.lastBeatenDayKey !== dayKey) {
     state.lastBeatenDayKey = dayKey;
-    addStats(0, 5, 10, 0);
+    addStats(0, 5, 10, 2); // 新增：挨打增加 2 点创伤
     showDialog("Sirei", "sirei", "「又逃课了是吧？跪下！」Sirei 的皮带狠狠落了下来……", [{ txt: "忍痛", fn: () => { closeDialog(); updateHUD(); } }]);
   }
 }
@@ -2582,10 +2619,20 @@ function strikeFish() {
   if (size >= 90) { peTarget = Math.floor(peTarget / 5); req = "极难"; }
   else if (size >= 50) { peTarget = Math.floor(peTarget / 2); req = "困难"; }
   else if (size < 20) { addLog(`[体育] 小型鱼免判定。`, "log-sys"); }
+  
+  // 新增：高疲劳/高疼痛对提竿的惩罚
+  let painPenalty = 0;
+  if (state.pain >= 60) { painPenalty = -2; addLog(`[疼痛] 浑身剧痛，体育判定 -2 惩罚骰。`, "log-err"); }
+  else if (state.pain >= 30) { painPenalty = -1; addLog(`[疼痛] 隐隐作痛，体育判定 -1 惩罚骰。`, "log-err"); }
+  
+  if (state.fatigue >= 85 && size >= 50) {
+      peTarget = Math.floor(peTarget / 2);
+      addLog(`[疲劳] 极度疲惫，遇到大鱼使不上力，提竿目标值减半！`, "log-err");
+  }
   let pullTime = (size >= 20 && size < 50) ? 10 : 0;
   if (pullTime > 0) addLog(`[耗时] 普通体型，拉扯额外耗时 10 分钟。`);
   addTime(pullTime);
-  let pePool = 0;
+  let pePool = painPenalty; // 加入疼痛惩罚
   if (state.displayWeather === "rain_heavy" || state.displayWeather === "fog" || state.displayWeather === "snow" || state.displayWeather === "thunder") pePool -= 1;
   if (state.eq.rod === "fiberglass") pePool += 1;
   if (state.eq.rod === "carbon_rod") pePool += 1;
@@ -2735,17 +2782,19 @@ function strikeFish() {
 
 function triggerDebtEvent() {
   if (state.money >= state.debt) {
-    state.money -= state.debt;
-    state.nextDebtDay += 7;
-    state.debtPaidCount++;
-    
-    if (state.debtPaidCount < DEBT_TABLE.length) {
-      state.debt = DEBT_TABLE[state.debtPaidCount];
-    } else {
-      state.debt = 2000;
-    }
-    
-    showDialog("Sirei", "sirei", `「算你识相。下周记得准备好 ${state.debt} 元。」`, [{ txt: "目送他离开", fn: () => { closeDialog(); updateHUD(); } }]);
+    showDialog("催债", "sirei", `「这周该交 ${state.debt} 元了。钱准备好了吗？」`, [
+      { txt: `乖乖交钱 (交 ${state.debt}元)`, fn: () => { 
+          state.money -= state.debt;
+          state.nextDebtDay += 7;
+          state.debtPaidCount++;
+          state.debtStrikes = 0;
+          if (state.debtPaidCount < DEBT_TABLE.length) state.debt = DEBT_TABLE[state.debtPaidCount];
+          else state.debt = 2000;
+          showDialog("Sirei", "sirei", `「算你识相。下周准备好 ${state.debt} 元。」`, [{ txt: "目送他离开", fn: () => { closeDialog(); updateHUD(); } }]);
+      }},
+      { txt: "拒绝交钱", cls: "ghost", fn: yieldSirei },
+      { txt: "武力反抗", cls: "danger", fn: fightSirei }
+    ]);
   } else {
     showDialog("催债", "sirei", "「看来你是不打算交钱了？」Sirei 举起了电棍。", [
       { txt: "反抗", fn: fightSirei, cls: "danger" }, { txt: "认栽", fn: yieldSirei, cls: "ghost" }
@@ -2763,10 +2812,49 @@ function fightSirei() {
       } }
     ]);
   } else {
-    triggerBadEnd("fight");
+    triggerElectricShock();
   }
 }
-function yieldSirei() { triggerBadEnd("debt"); }
+function yieldSirei() { triggerElectricShock(); }
+
+function triggerElectricShock() {
+  if (state.debtStrikes >= 1) {
+    triggerBadEnd("debt"); // 第二次违约直接死
+    return;
+  }
+  
+  state.debtStrikes++;
+  
+  showDialog("电击", "sirei", "「看来你需要长点记性。」一道强烈的电流穿过全身，你眼前一黑，失去了意识……", [
+    { txt: "陷入黑暗", fn: () => {
+        closeDialog();
+        // 强制跳到周一 07:00
+        let daysToAdd = 7 - state.weekday;
+        if (state.weekday === 0) daysToAdd = 1; // 周日直接跳到周一
+        let currentAbs = getDayKey() * 1440 + state.hour * 60 + state.minute;
+        let targetAbs = (getDayKey() + daysToAdd) * 1440 + 7 * 60;
+        let minsToAdd = targetAbs - currentAbs;
+        
+        addTime(minsToAdd);
+        
+        // 惩罚结算：清空疲劳，大幅增加疼痛、创伤、压力
+        state.fatigue = 0;
+        state.pain = clamp(state.pain + 30, 0, 100);
+        state.trauma = clamp(state.trauma + 20, 0, 100);
+        state.stress = clamp(state.stress + 10, 0, 100);
+        
+        // 顺延债务，不扣钱
+        state.nextDebtDay += 7;
+        
+        addLog(`[违约] 被电击击晕关禁闭，周一醒来。疼痛+30，创伤+20，疲劳清零。`, "log-err");
+        updateHUD(); updateControls();
+        
+        showDialog("醒来", "none", "你在孤儿院的床上醒来，浑身像被碾过一样剧痛。已经是周一早上了，你错过了整个周日……\n\n（疼痛+30，创伤+20）", [
+            { txt: "艰难地爬起来", fn: () => { closeDialog(); updateHUD(); } }
+        ]);
+    }}
+  ]);
+}
 
 function triggerTrueEnd() {
   showDialog("命运的转折", "sirei", "「这……这是十万块？！你一个孤儿，从哪弄来这么多钱？！」Sirei 盯着桌上的一沓钞票，满脸不可置信。", [
