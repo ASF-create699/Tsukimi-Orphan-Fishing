@@ -2,6 +2,9 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#f4efe3">
 <title>月都孤儿 · 钓鱼生存</title>
@@ -1110,6 +1113,7 @@ function addTime(mins) {
   if (state.takotsukiCount > 0 && mins >= 60 && ["school", "cafe", "villa", "mall"].includes(state.loc) && Math.random() < 0.15) {
       state.springDrug = clamp(state.springDrug + 5, 0, 100);
       state.stress = clamp(state.stress + 5, 0, 100);
+      state.takotsukiAffinity = clamp(state.takotsukiAffinity + 2, 0, 100); // 新增：它们觉得你憋着的样子很有趣
       addLog(`[恶作剧] 身上的章月突然乱动。`, "log-err");
       
       // 使用 setTimeout 让弹窗在时间推进的结算之后显示，防止被覆盖
@@ -2465,6 +2469,7 @@ function castLine() {
           addTime(30); // 折腾了半小时
           state.springDrug = clamp(state.springDrug + (10 * idleTakotsuki), 0, 100);
           addStats(0, 10);
+          state.takotsukiAffinity = clamp(state.takotsukiAffinity + (2 * idleTakotsuki), 0, 100); // 新增：捣乱的章月玩得很开心
           addLog(`[打断] 没在钓鱼的章月突然袭击了你，春药值大幅增加！`, "log-err");
           
           showDialog("章月的恶作剧", "takotsuki", `你刚抛出鱼竿，几只没在钓鱼的小章鱼突然顺着你的手臂缠了上来，触手直接钻进了衣服里……\n\n你被折腾得手脚发软，根本没心思看浮标。`, [
