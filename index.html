@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#f4efe3">
-<title>月都孤儿 · 钓鱼生存 v0.3.3</title>
+<title>月都孤儿 · 钓鱼生存 v0.3.4</title>
 <style>
   :root {
     --bg: #f4efe3; --panel: #fffdf5; --panel2: #f7f1e1;
@@ -2902,15 +2902,32 @@ function processZhangyueEvent(mainRemainTime = 0) {
                 
                 if (mainRemainTime > 5) {
                     mainRemainTime -= 5; 
-                    toast("你把它捞了上来，幸运的是，你的鱼还没跑！");
-                    advanceMainTime();
+                    showDialog("救援成功", "takotsuki", "你一把将章月从水里捞了上来。它吓得死死抱住你的手指，瑟瑟发抖。\n\n（亲密度 +2）\n\n幸运的是，你分心的这 5 分钟里，你的鱼还没跑！", [
+                        { txt: "继续钓鱼", fn: () => {
+                            closeDialog();
+                            advanceMainTime();
+                        }}
+                    ]);
                 } else if (mainRemainTime > 0) {
-                    toast("你救回了章月，但你的鱼跑了！");
-                    addStats(1.5, 1);
-                    G.fishState = "idle"; $('fishLog').textContent = "水面很平静..."; $('btnFishMain').textContent = "抛 竿"; $('btnFishMain').classList.remove('danger');
-                    updateHUD(); updateControls();
+                    showDialog("救援成功", "takotsuki", "你一把将章月从水里捞了上来。它吓得死死抱住你的手指，瑟瑟发抖。\n\n（亲密度 +2）\n\n但是，因为你分心去救它，你原本上钩的鱼跑掉了……", [
+                        { txt: "叹气", fn: () => {
+                            closeDialog();
+                            addStats(1.5, 1);
+                            G.pendingFish = null; // 明确清空，防止残留
+                            G.fishState = "idle"; 
+                            $('fishLog').textContent = "水面很平静..."; 
+                            $('btnFishMain').textContent = "抛 竿"; 
+                            $('btnFishMain').classList.remove('danger');
+                            updateHUD(); updateControls();
+                        }}
+                    ]);
                 } else {
-                    advanceMainTime();
+                    showDialog("救援成功", "takotsuki", "你一把将章月从水里捞了上来。它吓得死死抱住你的手指，瑟瑟发抖。\n\n（亲密度 +2）", [
+                        { txt: "摸摸它", fn: () => {
+                            closeDialog();
+                            advanceMainTime();
+                        }}
+                    ]);
                 }
             }},
             { txt: "不管它", fn: () => {
