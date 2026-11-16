@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#f4efe3">
-<title>月都孤儿 · 钓鱼生存 v0.2.16</title>
+<title>月都孤儿 · 钓鱼生存 v0.3.1</title>
 <style>
   :root {
     --bg: #f4efe3; --panel: #fffdf5; --panel2: #f7f1e1;
@@ -116,6 +116,18 @@
   .log-dice { color: #dcdcaa; }
   .log-ok { color: #6a9955; }
   .log-err { color: #f44747; }
+  .save-row { display: flex; flex-direction: column; gap: 6px; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; margin-bottom: 4px;}
+  .save-top { display: flex; align-items: center; gap: 8px; }
+  .save-id { font-size: 14px; font-weight: 900; color: var(--accent); width: 24px; text-align: center;}
+  .save-time { font-size: 10px; color: var(--dim); margin-left: auto; }
+  .save-desc { font-size: 12px; color: var(--text); line-height: 1.4; padding: 4px 0; border-bottom: 1px dashed var(--line); margin-bottom: 2px;}
+  .save-actions { display: flex; gap: 6px; }
+  .btn-save { background: #5b8ec9; color: #fff; }
+  .btn-load { background: var(--accent); color: #fff; }
+  .btn-del { background: var(--red); color: #fff; }
+  .save-actions button { flex: 1; padding: 6px 0; font-size: 11px; font-weight: 900; border: 0; border-radius: 2px; cursor: pointer; font-family: inherit;}
+  .save-actions button:active { transform: translateY(1px); filter: brightness(.9); }
+  .save-actions button:disabled { opacity: .4; cursor: default; transform: none; }
   #toast{position:fixed;left:50%;bottom:20px;z-index:99;transform:translate(-50%,10px);
     padding:8px 16px;background:rgba(91,83,67,.95);color:#fff;border-radius:4px;
     font-size:12px;opacity:0;pointer-events:none;transition:all .2s;}
@@ -140,6 +152,7 @@
       <div class="stat" onclick="openCodex()">📖 图鉴</div>
       <div class="stat" onclick="openHelp()">❓ 玩法</div>
       <div class="stat" onclick="openLog()">📜 日志</div>
+      <div class="stat" onclick="openSaveLoad()">💾 存档</div>
       <div class="stat" onclick="document.getElementById('ovStats').classList.add('show')">📊 状态</div>
     </div>
   </header>
@@ -274,12 +287,21 @@
       <div style="margin-top:6px;">
         <button class="btn-sm" style="width:100%;background:var(--gold);" onclick="toggleDifficulty()">切换难度（当前：<span id="btnDiffLabel">普通</span>）</button>
       </div>
-      <div style="margin-top:6px;display:flex;gap:6px;">
-        <button class="btn-sm" style="flex:1;" onclick="exportSave()">导出存档</button>
-        <button class="btn-sm" style="flex:1; background:var(--red);" onclick="if(confirm('确定要彻底删除进度重新开始吗？')){ localStorage.removeItem('yuedu_save_data'); location.reload(); }">删除存档</button>
-        <label class="btn-sm" style="flex:1;text-align:center;cursor:pointer;background:var(--dim);">
-          导入存档<input type="file" id="fileImport" style="display:none;" accept=".json" onchange="importSave(event)">
-        </label>
+      <div style="margin-top:6px; display:flex; flex-direction:column; gap:6px;">
+        <!-- 第一排：传统的文件导入导出 -->
+        <div style="display:flex; gap:6px;">
+          <button class="btn-sm" style="flex:1;" onclick="exportSave()">导出文件</button>
+          <label class="btn-sm" style="flex:1;text-align:center;cursor:pointer;background:var(--dim);">
+            导入文件<input type="file" id="fileImport" style="display:none;" accept=".json" onchange="importSave(event)">
+          </label>
+        </div>
+        <!-- 第二排：手机友好的文本复制粘贴 -->
+        <div style="display:flex; gap:6px;">
+          <button class="btn-sm" style="flex:1; background:#5b8ec9;" onclick="copySaveText()">复制存档文本</button>
+          <button class="btn-sm" style="flex:1; background:#5b8ec9;" onclick="pasteSaveText()">粘贴读取存档</button>
+        </div>
+        <!-- 第三排：删档重开 -->
+        <button class="btn-sm" style="background:var(--red); width:100%;" onclick="if(confirm('确定要彻底删除进度重新开始吗？')){ Object.keys(localStorage).forEach(key => { if (key.startsWith('yuedu_save_')) localStorage.removeItem(key); }); location.reload(); }">删除所有存档并重开</button>
       </div>
     </div>
   </div>
@@ -344,6 +366,18 @@
       「哎呀呀，拓海君，带什么好东西来看我了？让我看看……」
     </div>
     <div class="panel-body" id="doctorBody" style="border-top:1px dashed var(--line); padding-top:8px;"></div>
+  </div>
+</div>
+
+<div class="ov" id="ovSaveLoad">
+  <div class="panel" style="width: min(600px, 96%);">
+    <div class="panel-head">
+      <span class="dt">存档 / 读档</span>
+      <button class="btn-sm" onclick="document.getElementById('ovSaveLoad').classList.remove('show')">关闭</button>
+    </div>
+    <div class="panel-body" id="saveSlotBody" style="padding-right: 4px;">
+      <!-- 动态生成的槽位列表 -->
+    </div>
   </div>
 </div>
 
@@ -468,7 +502,8 @@ function openCodex() {
   }
 
   ["forest", "beach"].forEach(loc => {
-    const fishList = FISH_DB[loc] || [];
+    // 过滤掉章月（因为它是特殊宠物，不列入常规鱼类图鉴）
+    const fishList = (FISH_DB[loc] || []).filter(f => !f.tags || !f.tags.includes("takotsuki"));
     let caughtFish = 0;
     fishList.forEach(f => { if (state.caughtRecords[loc + "_" + f.name]) caughtFish++; });
 
@@ -702,46 +737,152 @@ function drawPortrait(type) {
   }
 }
 function drawFishIcon(ctx, shape, color) {
-  ctx.clearRect(0, 0, 48, 48); ctx.imageSmoothingEnabled = false; const S = 3; ctx.fillStyle = color || "#9e9e9e";
-  if (shape === 'eel') { ctx.fillRect(4*S, 7*S, 8*S, 2*S); ctx.fillRect(2*S, 6*S, 2*S, 4*S); }
-  else if (shape === 'slender') { ctx.fillRect(4*S, 6*S, 8*S, 4*S); ctx.fillRect(2*S, 4*S, 2*S, 3*S); }
-  else if (shape === 'round') { ctx.fillRect(5*S, 4*S, 6*S, 8*S); ctx.fillRect(3*S, 5*S, 2*S, 6*S); }
-  else if (shape === 'crab') { ctx.fillRect(5*S, 6*S, 6*S, 5*S); ctx.fillRect(2*S, 5*S, 2*S, 2*S); ctx.fillRect(12*S, 5*S, 2*S, 2*S); }
-  else if (shape === 'octopus') { 
-    ctx.fillRect(5*S, 3*S, 6*S, 7*S); ctx.fillRect(4*S, 5*S, 8*S, 4*S); 
-    ctx.fillStyle = "#000"; ctx.fillRect(5*S, 6*S, 1*S, 1*S); ctx.fillRect(10*S, 6*S, 1*S, 1*S);
+  ctx.clearRect(0, 0, 48, 48); 
+  ctx.imageSmoothingEnabled = false; 
+  const S = 3; 
+  let baseColor = color || "#9e9e9e";
+  
+  // 辅助工具：颜色变暗（画阴影）
+  function getDarker(hex, percent) {
+      let num = parseInt(hex.replace("#",""),16);
+      let amt = Math.round(2.55 * percent);
+      let R = (num >> 16) - amt; let G = (num >> 8 & 0x00FF) - amt; let B = (num & 0x0000FF) - amt;
+      return "#" + (0x1000000 + (R<0?0:R<255?R:255)*0x10000 + (G<0?0:G<255?G:255)*0x100 + (B<0?0:B<255?B:255)).toString(16).slice(1);
   }
-  else if (shape === 'lobster') { ctx.fillRect(6*S, 6*S, 4*S, 6*S); ctx.fillRect(4*S, 12*S, 8*S, 1*S); }
-  else if (shape === 'organ') {
-    ctx.fillRect(5*S, 5*S, 6*S, 6*S);
-    ctx.fillStyle = "#8b3a3a"; ctx.fillRect(6*S, 6*S, 4*S, 4*S);
-    ctx.fillStyle = "#4a1010"; ctx.fillRect(7*S, 7*S, 2*S, 2*S);
+  let darkColor = getDarker(baseColor, 15); // 阴影
+  let lightColor = "#ffffff"; // 高光
+
+  // 通用画眼睛
+  function drawEye(x, y) {
+    ctx.fillStyle = "#fff"; ctx.fillRect(x, y, 2*S, 2*S);
+    ctx.fillStyle = "#000"; ctx.fillRect(x+S, y+S, S, S);
+    ctx.fillStyle = "#fff"; ctx.fillRect(x+0.5*S, y+0.5*S, 0.5*S, 0.5*S); // 眼睛反光
   }
-  else if (shape === 'takotsuki') {
+
+  if (shape === 'eel') { // 鳗鱼：细长且波浪形
+    ctx.fillStyle = baseColor; 
+    ctx.fillRect(4*S, 7*S, 8*S, 2*S); // 身体
+    ctx.fillRect(2*S, 5*S, 2*S, 2*S); // 翘起的头
+    ctx.fillStyle = darkColor; 
+    ctx.fillRect(4*S, 8*S, 8*S, 1*S); // 腹部阴影
+    ctx.fillRect(10*S, 7*S, 2*S, 1*S); // 尾巴
+    drawEye(3*S, 5*S);
+  } 
+  else if (shape === 'slender') { // 细长形（秋刀鱼/沙丁鱼）
+    ctx.fillStyle = baseColor; 
+    ctx.fillRect(4*S, 5*S, 8*S, 4*S); // 身体
+    ctx.fillRect(2*S, 3*S, 2*S, 3*S); // 上尾鳍
+    ctx.fillRect(2*S, 8*S, 2*S, 3*S); // 下尾鳍
+    ctx.fillStyle = lightColor; ctx.fillRect(5*S, 5*S, 6*S, 1*S); // 背部高光
+    ctx.fillStyle = darkColor; 
+    ctx.fillRect(4*S, 8*S, 8*S, 1*S); // 腹部
+    ctx.fillRect(6*S, 3*S, 2*S, 2*S); // 背鳍
+    drawEye(4*S, 6*S);
+  }
+  else if (shape === 'round') { // 圆扁形（河鲀/鳑鲏）
+    ctx.fillStyle = baseColor; 
+    ctx.fillRect(5*S, 3*S, 6*S, 10*S); // 主身体
+    ctx.fillRect(4*S, 4*S, 8*S, 8*S); // 圆角
+    ctx.fillRect(2*S, 6*S, 2*S, 4*S); // 尾鳍
+    ctx.fillStyle = darkColor; 
+    ctx.fillRect(5*S, 11*S, 6*S, 2*S); // 腹部
+    drawEye(6*S, 5*S);
+    ctx.fillStyle = "#fff"; ctx.fillRect(5*S, 8*S, 6*S, 2*S); // 肚子白斑
+  }
+  else if (shape === 'spindle') { // 纺锤形（金枪鱼/旗鱼）
+    ctx.fillStyle = baseColor; 
+    ctx.fillRect(3*S, 5*S, 10*S, 6*S); 
+    ctx.fillRect(5*S, 3*S, 6*S, 10*S); // 中间加宽
+    ctx.fillStyle = lightColor; ctx.fillRect(4*S, 4*S, 8*S, 2*S); // 背部反光
+    ctx.fillStyle = darkColor; 
+    ctx.fillRect(3*S, 9*S, 10*S, 2*S); // 腹部
+    ctx.fillRect(1*S, 2*S, 2*S, 4*S); // 叉状尾
+    ctx.fillRect(1*S, 10*S, 2*S, 4*S);
+    drawEye(4*S, 6*S);
+  }
+  else if (shape === 'crab') { // 螃蟹
+    ctx.fillStyle = baseColor; 
+    ctx.fillRect(5*S, 5*S, 6*S, 5*S); // 壳
+    ctx.fillStyle = darkColor; 
+    ctx.fillRect(5*S, 8*S, 6*S, 2*S); 
+    // 钳子
+    ctx.fillRect(2*S, 4*S, 2*S, 2*S); ctx.fillRect(1*S, 2*S, 2*S, 2*S);
+    ctx.fillRect(12*S, 4*S, 2*S, 2*S); ctx.fillRect(13*S, 2*S, 2*S, 2*S);
+    // 腿
+    ctx.fillRect(4*S, 10*S, 1*S, 3*S); ctx.fillRect(6*S, 10*S, 1*S, 3*S);
+    ctx.fillRect(9*S, 10*S, 1*S, 3*S); ctx.fillRect(11*S, 10*S, 1*S, 3*S);
+    drawEye(6*S, 5*S); drawEye(9*S, 5*S);
+  }
+  else if (shape === 'octopus') { // 章鱼/鱿鱼
+    ctx.fillStyle = baseColor; 
+    ctx.fillRect(5*S, 2*S, 6*S, 6*S); // 头
+    ctx.fillRect(4*S, 4*S, 8*S, 4*S); 
+    // 触手
+    ctx.fillRect(3*S, 8*S, 2*S, 4*S);
+    ctx.fillRect(5*S, 8*S, 2*S, 5*S);
+    ctx.fillRect(8*S, 8*S, 2*S, 4*S);
+    ctx.fillRect(10*S, 8*S, 2*S, 5*S);
+    drawEye(5*S, 4*S); drawEye(9*S, 4*S);
+  }
+  else if (shape === 'shell') { // 贝壳
+    ctx.fillStyle = baseColor;
+    ctx.fillRect(4*S, 5*S, 8*S, 8*S);
+    ctx.fillStyle = darkColor;
+    for(let i=0; i<3; i++) ctx.fillRect((4+i*3)*S, 5*S, 1*S, 8*S); // 纹理
+    ctx.fillStyle = "#fff"; ctx.fillRect(4*S, 4*S, 8*S, 1*S); // 高光边
+  }
+  else if (shape === 'urchin') { // 海胆
+    ctx.fillStyle = baseColor;
+    ctx.fillRect(6*S, 6*S, 4*S, 4*S); // 核心
+    ctx.fillStyle = darkColor;
+    for(let i=2; i<=10; i+=2) {
+      ctx.fillRect(7*S, i*S, 2*S, 1*S); // 上下刺
+      ctx.fillRect(i*S, 7*S, 1*S, 2*S); // 左右刺
+    }
+  }
+  else if (shape === 'lobster') { // 龙虾
+    ctx.fillStyle = baseColor; 
+    ctx.fillRect(6*S, 4*S, 4*S, 7*S); // 身体
+    ctx.fillStyle = darkColor; 
+    ctx.fillRect(5*S, 9*S, 6*S, 2*S); // 尾扇
+    // 钳子
+    ctx.fillRect(4*S, 2*S, 2*S, 3*S); ctx.fillRect(10*S, 2*S, 2*S, 3*S);
+    drawEye(6*S, 4*S); drawEye(8*S, 4*S);
+  }
+  else if (shape === 'organ') { // 内脏
+    ctx.fillStyle = baseColor;
+    ctx.fillRect(4*S, 4*S, 8*S, 7*S);
+    ctx.fillStyle = darkColor; ctx.fillRect(5*S, 5*S, 6*S, 5*S);
+    ctx.fillStyle = "#fff"; ctx.fillRect(6*S, 3*S, 1*S, 2*S); // 血管
+    ctx.fillRect(9*S, 2*S, 2*S, 1*S);
+  }
+  else if (shape === 'takotsuki') { // 章月
     ctx.fillStyle = "#9e9e9e";
     ctx.fillRect(4*S, 2*S, 8*S, 7*S); 
     ctx.fillRect(3*S, 4*S, 10*S, 4*S);
-    ctx.fillRect(3*S, 9*S, 2*S, 3*S);
-    ctx.fillRect(6*S, 9*S, 2*S, 3*S);
-    ctx.fillRect(10*S, 9*S, 2*S, 3*S);
-    ctx.fillRect(8*S, 9*S, 2*S, 2*S);
-    ctx.fillStyle = "#7376b9";
-    ctx.fillRect(5*S, 5*S, 2*S, 2*S);
-    ctx.fillRect(9*S, 5*S, 2*S, 2*S);
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(5*S, 5*S, 1*S, 1*S);
-    ctx.fillRect(9*S, 5*S, 1*S, 1*S);
-    ctx.fillStyle = "#333";
-    ctx.fillRect(4*S, 4*S, 1*S, 1*S);
-    ctx.fillRect(6*S, 4*S, 1*S, 1*S);
-    ctx.fillRect(8*S, 4*S, 1*S, 1*S);
-    ctx.fillRect(10*S, 4*S, 1*S, 1*S);
-    ctx.fillStyle = "#c0c0c0";
-    ctx.fillRect(4*S, 7*S, 2*S, 1*S);
-    ctx.fillRect(10*S, 7*S, 2*S, 1*S);
+    ctx.fillStyle = "#7f7f7f"; // 阴影
+    ctx.fillRect(3*S, 9*S, 2*S, 3*S); ctx.fillRect(6*S, 9*S, 2*S, 3*S);
+    ctx.fillRect(10*S, 9*S, 2*S, 3*S); ctx.fillRect(8*S, 9*S, 2*S, 2*S);
+    // 豆豆眼
+    ctx.fillStyle = "#7376b9"; ctx.fillRect(5*S, 5*S, 2*S, 2*S); ctx.fillRect(9*S, 5*S, 2*S, 2*S);
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(5*S, 5*S, 1*S, 1*S); ctx.fillRect(9*S, 5*S, 1*S, 1*S);
+    ctx.fillStyle = "#333"; 
+    ctx.fillRect(4*S, 4*S, 1*S, 1*S); ctx.fillRect(6*S, 4*S, 1*S, 1*S); ctx.fillRect(8*S, 4*S, 1*S, 1*S); ctx.fillRect(10*S, 4*S, 1*S, 1*S);
   }
-  else { ctx.fillRect(5*S, 5*S, 6*S, 6*S); ctx.fillRect(3*S, 4*S, 2*S, 8*S); }
-  if (shape !== 'crab' && shape !== 'octopus' && shape !== 'organ' && shape !== 'takotsuki') { ctx.fillStyle = "#fff"; ctx.fillRect(9*S, 6*S, 1*S, 1*S); ctx.fillStyle = "#000"; ctx.fillRect(10*S, 6*S, 1*S, 1*S); }
+  else { // 默认普通鱼（鲤鱼/鲫鱼）
+    ctx.fillStyle = baseColor; 
+    ctx.fillRect(4*S, 5*S, 8*S, 6*S); // 身体
+    ctx.fillRect(3*S, 6*S, 2*S, 4*S); // 头部圆角
+    ctx.fillStyle = lightColor; ctx.fillRect(5*S, 5*S, 6*S, 1*S); // 背部反光
+    ctx.fillStyle = darkColor; 
+    ctx.fillRect(4*S, 10*S, 8*S, 1*S); // 腹部阴影
+    ctx.fillRect(12*S, 4*S, 2*S, 3*S); // 上尾鳍
+    ctx.fillRect(12*S, 9*S, 2*S, 3*S); // 下尾鳍
+    ctx.fillRect(7*S, 3*S, 3*S, 2*S); // 背鳍
+    drawEye(4*S, 6*S);
+    // 鳃线
+    ctx.fillStyle = darkColor; ctx.fillRect(6*S, 6*S, 1*S, 4*S);
+  }
 }
 function drawTreasureIcon(ctx, rarity) {
   ctx.clearRect(0, 0, 48, 48); ctx.imageSmoothingEnabled = false; const S = 3;
@@ -894,7 +1035,8 @@ let state = {
   lastSqueezeDayKey: -1   // 上次清理春药（取卵/自行处理）的日期，用于日常衰减
 };
 let G = { schStep: 0, isFishing: false, fishState: "idle", pendingFish: null,
-          inClass: false, pendingDetention: false, moving: false, iceBroken: false };
+          inClass: false, pendingDetention: false, moving: false, iceBroken: false,
+          zyState: 'idle', zyWait: 0, zyFish: null, zyTime: 0 }; // 章月钓鱼专用状态
 
 function $(id) { return document.getElementById(id); }
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._timer); t._timer = setTimeout(() => t.classList.remove('show'), 2000); }
@@ -2697,6 +2839,108 @@ function drawFromPool(pool) {
   return pool[pool.length - 1];
 }
 
+// ==================== 章月独立钓鱼结算 ====================
+function processZhangyueEvent(mainRemainTime = 0) {
+    if (G.zyState !== 'waiting') return;
+    G.zyState = 'idle';
+    
+    let fish = G.zyFish;
+    let success = false;
+    let size = rnd(fish.min, fish.max);
+    
+    let peTarget = 40;
+    let req = "常规";
+    if (size >= 90) { peTarget = Math.floor(40 / 5); req = "极难"; }
+    else if (size >= 50) { peTarget = Math.floor(40 / 2); req = "困难"; }
+    
+    let zPeRoll = rnd(1, 100);
+    if (size < 20 || zPeRoll <= peTarget) success = true;
+    
+    // 辅助函数：推进主角的剩余时间并进入咬钩
+    const advanceMainTime = () => {
+        if (mainRemainTime > 0) {
+            addTime(mainRemainTime);
+            G.fishState = "bite"; 
+            $('fishLog').textContent = "咬钩了！快提竿！"; 
+            $('btnFishMain').textContent = "提 竿 !"; 
+            $('btnFishMain').classList.add('danger');
+        } else {
+            updateHUD(); 
+            updateControls();
+        }
+    };
+    
+    if (success) {
+        let slots = getFishSlots(size);
+        if (getBagUsed() + slots <= state.bagCap) {
+            state.fishBag.push({ name: fish.name, size: size, price: fish.price, shape: fish.shape, color: fish.color, time: state.totalMinutes || 0, rot: 0, isDried: false, tags: fish.tags, seasons: fish.seasons || [], frozen: false });
+            addLog(`[章月] 水花四溅，它钓上了一条 ${size}cm 的 ${fish.name}，开心地扔进了你的鱼篓。`, "log-ok");
+            toast(`章月帮你钓上了一条【${fish.name}】！`);
+            showDialog("章月上鱼", "takotsuki", `旁边的水花突然溅起。\n\n章月用它的小触手死死抱住一条 ${size}cm 的【${fish.name}】，邀功似的扔进了你的鱼篓里，然后吐了一串开心的小泡泡。`, [
+                { txt: "摸摸它", fn: () => { 
+                    closeDialog(); 
+                    state.takotsukiAffinity = clamp(state.takotsukiAffinity + 1, 0, 100);
+                    advanceMainTime();
+                }}
+            ]);
+        } else {
+            addLog(`[章月] 它钓上了一条 ${size}cm 的 ${fish.name}，但鱼篓满了，只能扔回水里。`, "log-err");
+            toast("章月钓到了鱼，但你的鱼篓满了！");
+            showDialog("章月上鱼", "takotsuki", `章月钓上了一条 ${size}cm 的【${fish.name}】，但你的鱼篓已经装不下了，它只能委屈地把它扔回了水里。`, [
+                { txt: "没办法", fn: () => { 
+                    closeDialog(); 
+                    advanceMainTime();
+                }}
+            ]);
+        }
+    } else {
+        addLog(`[章月] 它被大鱼拖进了水里，咕噜咕噜地求救！`, "log-err");
+        showDialog("章月落水", "takotsuki", "章月被一条巨大的黑影猛地拽向深水，它死死抱着迷你鱼竿，向你投来求助的豆豆眼。", [
+            { txt: "花5分钟去捞", fn: () => {
+                closeDialog();
+                addTime(5); // 捞它耗费5分钟
+                state.takotsukiAffinity = clamp(state.takotsukiAffinity + 2, 0, 100);
+                
+                // 扣除救人的 5 分钟后，主角的鱼还在不在？
+                if (mainRemainTime > 5) {
+                    mainRemainTime -= 5; 
+                    toast("你把它捞了上来，幸运的是，你的鱼还没跑！");
+                    addLog(`[救援] 耗时5分钟，亲密度 +2，你的鱼还在。`, "log-sys");
+                    advanceMainTime();
+                } else if (mainRemainTime > 0) {
+                    toast("你救回了章月，但你的鱼跑了！");
+                    addLog(`[救援] 耗时5分钟，你分心去救章月，上钩的鱼跑了。`, "log-err");
+                    addStats(1.5, 1);
+                    G.fishState = "idle"; $('fishLog').textContent = "水面很平静..."; $('btnFishMain').textContent = "抛 竿"; $('btnFishMain').classList.remove('danger');
+                    updateHUD(); updateControls();
+                } else {
+                    // 本来就是结算章月（0剩余时间）
+                    toast("你把它捞了上来，亲密度 +2。");
+                    advanceMainTime();
+                }
+            }},
+            { txt: "不管它", fn: () => {
+                closeDialog();
+                if (state.takotsukiAffinity >= 60) {
+                    G.zyRecoverTime = state.totalMinutes + 10; // 记录爬上岸需要的10分钟CD
+                    toast("你无视了它，它委屈巴巴地在水里挣扎着往岸上爬……");
+                    addLog(`[章月] 它正在自己爬回岸上（约需10分钟）。`, "log-sys");
+                } else {
+                    state.takotsukiCount -= 1;
+                    state.hasMiniRod = false;
+                    G.zyRecoverTime = Infinity; 
+                    toast("章月沉了下去...（数量 -1，迷你鱼竿损毁）");
+                    addLog(`[章月] 它沉入了水底。你失去了 1 只章月和迷你鱼竿。`, "log-err");
+                }
+                
+                // 不管它，主角的时间照常推进，毫不受影响
+                advanceMainTime();
+            }}
+        ]);
+    }
+}
+
+// ==================== 抛竿 ====================
 function castLine() {
   if (getBagUsed() >= state.bagCap) { toast("鱼篓满了，去整理一下吧！"); return; }
   updateEq();
@@ -2705,27 +2949,25 @@ function castLine() {
   if (!LINES[eq.line] || state.inv.lines[eq.line] <= 0) { toast("没有鱼线！"); return; }
   if (!BAITS[eq.bait] || state.inv.baits[eq.bait] <= 0) { toast("没有鱼饵！"); return; }
   
-  // 高疲劳：30% 概率肌肉拉伤
+  // 高疲劳与重疼痛判定
   if (state.fatigue >= 85 && Math.random() < 0.3) {
       addStats(0, 0, 2);
       addLog(`[疲劳] 手臂肌肉拉伤，疼痛 +2。`, "log-err");
       toast("手臂一阵抽痛，拉伤了…（疼痛 +2）");
   }
-  // 重度疼痛：每次抛竿额外疲劳
   if (state.pain >= 90) {
       addStats(2);
       addLog(`[疼痛] 剧痛让你满头大汗，疲劳 +2。`, "log-err");
   }
-  
-  // 询问是否使用章月卵
+
   if (state.takotsukiEgg > 0 && !G.useEggPrompt) {
       G.useEggPrompt = true;
       showDialog("使用章月卵？", "takotsuki", `你身上还有 ${state.takotsukiEgg} 枚章月卵。\n它散发的特殊气味能吸引最稀有的鱼类。要使用 1 枚作为鱼饵吗？`, [
           { txt: "使用 (必定提竿成功)", cls: "danger", fn: () => {
               state.takotsukiEgg -= 1;
-              G.forceEggBite = true; // 标记这次抛竿使用了卵
+              G.forceEggBite = true;
               closeDialog();
-              castLine(); // 重新执行抛竿逻辑
+              castLine();
           }},
           { txt: "用普通饵就好", fn: () => {
               G.forceEggBite = false;
@@ -2735,11 +2977,13 @@ function castLine() {
       ]);
       return;
   }
-  // 重置标记防死循环
   let isUsingEgg = G.forceEggBite;
   G.useEggPrompt = false;
   G.forceEggBite = false;
+  
   addLog(`==================== 开始抛竿 ====================`, "log-sys");
+  
+  // 雷击判定
   if (state.displayWeather === "thunder") {
     let strike = rnd(1, 100);
     addLog(`[雷暴] 抛竿雷击判定 1d100 = ${strike}`, "log-dice");
@@ -2750,328 +2994,269 @@ function castLine() {
       return;
     }
   }
+
+  // 1. 判定主角时间
+  let mainWaitTime = 30;
   let branch = rnd(1, 100);
-  addLog(`[分岔] 掷出 1D100 = ${branch} → ${branch <= 20 ? '杂物(≤20)' : '渔获(>20)'}`);
-  if (branch <= 20) {
-    addTime(30);
-    addLog(`[杂物] 耗时 30 分钟。未消耗鱼饵，无幸运加成。`, "log-dice");
-    let luckRoll = rollD100(0);
-    addLog(`[杂物-幸运] ${luckRoll.detail} vs 幸运 60`);
-    if (luckRoll.result > 60) {
-      addLog(`[杂物-判定] 失败，打捞到垃圾。`, "log-err");
-      addStats(1.5, 1);
-      $('fishLog').textContent = "你钓上来一团水草和垃圾，只好扔掉了。";
-    } else {
-      let tier = "垃圾"; let price = 0;
-      if (luckRoll.result === 1) { tier = "epic"; price = rnd(500, 999); }
-      else if (luckRoll.result <= 12) { tier = "rare"; price = rnd(200, 400); }
-      else if (luckRoll.result <= 30) { tier = "uncommon"; price = rnd(50, 100); }
-      else { tier = "common"; price = rnd(5, 20); }
-      if (getBagUsed() >= state.bagCap) {
-        addLog(`[杂物-判定] 捞上宝物但鱼篓已满。`, "log-err");
-        $('fishLog').textContent = "捞上东西了，但鱼篓满了装不下！";
-      } else {
-        let nameArr = TREASURE_DB[tier]; let tName = nameArr[rnd(0, nameArr.length - 1)];
-        state.treasureBag.push({ name: tName, price: price, rarity: tier });
-        addLog(`[杂物-判定] 打捞到宝物：【${tName}】 (估价 ${price}元)`, "log-ok");
-        addStats(1.5, -3);
-        $('fishLog').textContent = `捞上来一件【${tName}】！已放入鱼篓。`;
-      }
-    }
-    return;
-  }
-  state.inv.baits[eq.bait]--;
-  buildFishPanelUI(); updateHUD();
-  addLog(`[渔获] 消耗 1 份 ${BAITS[eq.bait].name}。`);
-
-  // 新增：未钓鱼的章月袭击判定
-  let idleTakotsuki = state.takotsukiCount;
-  if (state.hasMiniRod && state.takotsukiCount > 0) {
-      idleTakotsuki -= 1; // 如果有迷你鱼竿，有 1 只在帮忙钓鱼
-  }
+  let isJunk = (branch <= 20);
   
-  if (idleTakotsuki > 0) {
-      let attackProb = idleTakotsuki * 5; // 每只未钓鱼的章月加5%概率
-      if (rnd(1, 100) <= attackProb) {
-          addTime(30); // 折腾了半小时
-          state.springDrug = clamp(state.springDrug + (10 * idleTakotsuki), 0, 100);
-          addStats(0, 10);
-          state.takotsukiAffinity = clamp(state.takotsukiAffinity + (2 * idleTakotsuki), 0, 100); // 新增：捣乱的章月玩得很开心
-          addLog(`[打断] 没在钓鱼的章月突然袭击了你，春药值大幅增加！`, "log-err");
-          
-          showDialog("章月的恶作剧", "takotsuki", `你刚抛出鱼竿，几只没在钓鱼的小章鱼突然顺着你的手臂缠了上来，触手直接钻进了衣服里……\n\n你被折腾得手脚发软，根本没心思看浮标。`, [
-              { txt: "好不容易挣脱", fn: () => { 
-                  closeDialog(); 
-                  $('fishLog').textContent = "你被章月打断了，根本没钓到鱼。"; 
-                  updateHUD(); 
-              }}
-          ]);
-          return; // 强制打断钓鱼，不进入后续咬钩判定
-      }
-  }
-  let luckPool = BAITS[eq.bait].pool;
-  if (state.displayWeather === "rain_light") luckPool += 1;
-  if (state.displayWeather === "rain_heavy" || state.displayWeather === "thunder") luckPool -= 1;
-  let nowM = state.totalMinutes || 0;
-  if (state.inkPenalty && state.inkPenalty.stacks > 0) {
-    const ink = state.inkPenalty;
-    if (ink.loc === state.loc && nowM < ink.until) { luckPool -= ink.stacks; addLog(`[喷墨] 本水域墨汁残留，惩罚骰 -${ink.stacks}（剩余 ${ink.until - nowM} 分钟）。`, "log-dice"); }
-    else if (ink.loc !== state.loc) { addLog(`[喷墨] 已离开喷墨水域，墨汁失效。`, "log-sys"); }
-    else { addLog(`[喷墨] 墨汁已消散。`, "log-sys"); }
-    ink.stacks = 0; ink.loc = null; ink.until = 0;
-  }
-  // 动态计算天气加成，确保日志与实际判定一致
-  let weatherBonus = 0;
-  if (state.displayWeather === "rain_light") weatherBonus = 1;
-  else if (state.displayWeather === "rain_heavy" || state.displayWeather === "thunder") weatherBonus = -1;
-  
-  // 计算章月加成（每只+5）
-  let zyBonus = state.takotsukiCount * 5;
-  let currentLuck = 60 + zyBonus;
+  if (!isJunk) {
+      state.inv.baits[eq.bait]--;
+      buildFishPanelUI(); updateHUD();
+      addLog(`[渔获] 消耗 1 份 ${BAITS[eq.bait].name}。`);
 
-  addLog(`[状态] 基础幸运 ${currentLuck} (基础60 + 章月${zyBonus})。鱼饵加成 ${BAITS[eq.bait].pool}，天气加成 ${weatherBonus}。`);
-  let luckCheck = checkLuck(currentLuck, luckPool);
-  addLog(`[渔获-幸运] ${luckCheck.detail} vs 幸运 ${currentLuck} → 【${luckCheck.txt}】`, "log-dice");
-  if (luckCheck.level === "失败") {
-    addTime(30); addStats(1.5, 1);
-    addLog(`[结果] 空军。耗时 30 分钟，压力 +1。`, "log-err");
-    $('fishLog').textContent = "等了很久，浮标毫无动静，空军了。";
-    return;
-  }
-  addTime(luckCheck.wait);
-  addLog(`[时间] ${luckCheck.txt}，耗时 ${luckCheck.wait} 分钟。`, "log-sys");
-  let rarRes = pickRarity(luckCheck.level);
-  // 章月卵特供：稀有度自动提升一级
-  if (isUsingEgg) {
-      if (rarRes.chosen === "common") rarRes.chosen = "uncommon";
-      else if (rarRes.chosen === "uncommon") rarRes.chosen = "rare";
-      else if (rarRes.chosen === "rare") rarRes.chosen = "epic";
-      addLog(`[章月卵] 散发出的奇异气味，将稀有度池强行提升至【${RARITY_NAMES[rarRes.chosen]}】！`, "log-ok");
-  }
-  addLog(`[稀有度池] ${luckCheck.level}池掷骰 ${rarRes.roll} → 前往【${RARITY_NAMES[rarRes.chosen]}】池`, "log-dice");
-  let fishPool = buildFishPool(state.loc, rarRes.chosen, state.season, state.displayWeather, state.hour);
-  if (state.displayWeather === "thunder") {
-    fishPool.push({ name: "雷击变异鱼", min: 20, max: 100, price: 10.0, color: "#e0c080", shape: "normal", rarity: rarRes.chosen, tags: ["mutated", "seafood"], seasons: [], weight: 1 });
-    addLog(`[天气] 雷暴池内追加【雷击变异鱼】(权重1)。`, "log-sys");
-  }
-  if (fishPool.length === 0) {
-    const order = ["epic", "rare", "uncommon", "common"];
-    let startIdx = order.indexOf(rarRes.chosen);
-    if (startIdx < 0) startIdx = 0;
-    for (let i = startIdx + 1; i < order.length; i++) {
-      let tryPool = buildFishPool(state.loc, order[i], state.season, state.displayWeather, state.hour);
-      if (tryPool.length > 0) {
-        fishPool = tryPool;
-        addLog(`[抽鱼] 【${RARITY_NAMES[rarRes.chosen]}】池为空，降级到【${RARITY_NAMES[order[i]]}】池。`, "log-sys");
-        break;
-      }
-    }
-    if (fishPool.length === 0) {
-      const isNight = (state.hour < 6 || state.hour >= 18);
-      fishPool = (FISH_DB[state.loc] || FISH_DB["forest"])
-        .filter(f => !f.seasons || f.seasons.length === 0 || f.seasons.includes(state.season))
-        .filter(f => !(f.tags.includes("night") && !isNight))
-        .filter(f => !(f.tags.includes("day") && isNight))
-        .filter(f => !(f.tags.includes("rain_only") && !["rain_light", "rain_heavy", "thunder"].includes(state.displayWeather)))
-        .filter(f => !(f.tags.includes("snow_only") && state.displayWeather !== "snow"))
-        .map(f => ({ ...f, weight: 1 }));
-      addLog(`[抽鱼] 全稀有度池皆空，使用水域保底池（已过季节/时段/天气）。`, "log-err");
-    }
-  }
-  // 如果已经拥有章月，提前把池子里的章月过滤掉
-  if (state.takotsukiCount > 0) {
-      let filteredPool = fishPool.filter(f => !f.tags || !f.tags.includes("takotsuki"));
-      if (filteredPool.length > 0) {
-          fishPool = filteredPool;
-      } else {
-          // 如果过滤后空了（比如极品池只有章月），降级到普通池保底
-          fishPool = buildFishPool(state.loc, "common", state.season, state.displayWeather, state.hour);
-      }
-  }
-  let fish = drawFromPool(fishPool);
-  let size = rnd(fish.min, fish.max);
-  if (state.displayWeather === "rain_heavy") { size = Math.max(size, 20); addLog(`[天气] 大雨强制尺寸≥20cm。`, "log-sys"); }
-  G.pendingFish = { fish, size };
-  addLog(`[抽鱼] 抽中 ${fish.name} (${size}cm)`, "log-ok");
-  G.fishState = "bite";
-  $('fishLog').textContent = "咬钩了！快提竿！";
-  $('btnFishMain').textContent = "提 竿 !";
-  $('btnFishMain').classList.add('danger');
-}
-
-function strikeFish() {
-  G.fishState = "idle"; $('btnFishMain').textContent = "抛 竿"; $('btnFishMain').classList.remove('danger');
-  if (!G.pendingFish) return;
-  let { fish, size } = G.pendingFish; G.pendingFish = null;
-  addLog(`-------------------- 提竿判定 --------------------`, "log-sys");
-  let peTarget = state.stats.pe;
-  let req = "常规";
-  if (size >= 90) { peTarget = Math.floor(peTarget / 5); req = "极难"; }
-  else if (size >= 50) { peTarget = Math.floor(peTarget / 2); req = "困难"; }
-  else if (size < 20) { addLog(`[体育] 小型鱼免判定。`, "log-sys"); }
-  
-  // 新增：高疲劳/高疼痛对提竿的惩罚
-  let painPenalty = 0;
-  if (state.pain >= 60) { painPenalty = -2; addLog(`[疼痛] 浑身剧痛，体育判定 -2 惩罚骰。`, "log-err"); }
-  else if (state.pain >= 30) { painPenalty = -1; addLog(`[疼痛] 隐隐作痛，体育判定 -1 惩罚骰。`, "log-err"); }
-  
-  if (state.fatigue >= 85 && size >= 50) {
-      peTarget = Math.floor(peTarget / 2);
-      addLog(`[疲劳] 极度疲惫，遇到大鱼使不上力，提竿目标值减半！`, "log-err");
-  }
-  let pullTime = (size >= 20 && size < 50) ? 10 : 0;
-  if (pullTime > 0) addLog(`[耗时] 普通体型，拉扯额外耗时 10 分钟。`);
-  addTime(pullTime);
-  let pePool = painPenalty; // 加入疼痛惩罚
-  if (state.displayWeather === "rain_heavy" || state.displayWeather === "fog" || state.displayWeather === "snow" || state.displayWeather === "thunder") pePool -= 1;
-  if (state.eq.rod === "fiberglass") pePool += 1;
-  if (state.eq.rod === "carbon_rod") pePool += 1;
-  let success = true;
-  if (size >= 20) {
-    if (state.eq.rod === "carbon_rod") peTarget += 10;
-    let peRoll = rollD100(pePool);
-    success = (peRoll.result <= peTarget);
-    addLog(`[体育] 需【${req}成功】，目标 ≤${peTarget}。${peRoll.detail} → ${success ? '成功' : '失败'}`, success ? "log-ok" : "log-err");
-  }
-  if (success) {
-    // 如果是章月，走特殊逻辑
-    if (fish.tags && fish.tags.includes("takotsuki")) {
-        state.takotsukiCount += 1;
-        state.takotsukiTime = state.totalMinutes; // 记录/刷新离水时间
-        if (state.takotsukiAffinity === 0) state.takotsukiAffinity = 10;
-        addLog(`[奇遇] 钓上了一只灰色小章鱼！已自动携带。`, "log-ok");
-        let desc = "";
-        let title = "";
-        if (!state.takotsukiMet) {
-            desc = "你钓上来一只软趴趴的灰色小章鱼。它用堇色的豆豆眼无辜地看着你，触手紧紧抱着鱼钩不放。\n\n你从没见过这种生物。";
-            title = "奇妙的邂逅";
-            state.takotsukiMet = true;
-        } else {
-            desc = "你又钓上来一只灰色小章鱼。它轻车熟路地顺着鱼线爬到了你身上，似乎早就认识你。";
-            title = "熟悉的触感";
-        }
-        showDialog(title, "takotsuki", desc + "\n\n（它会一直黏在你身上，注意在24小时内把它放到孤儿院的鱼缸里，否则它会干瘪消失！）", [
-            { txt: "由它黏着吧", fn: () => { 
-                closeDialog(); 
-                toast("章月黏在了你身上。"); 
-                updateHUD();
-            }}
-        ]);
-        return; // 直接中断，不进入鱼篓
-    }
-    let codexKey = state.loc + "_" + fish.name;
-    if (!state.caughtRecords) state.caughtRecords = {};
-    if (!state.caughtRecords[codexKey]) {
-      state.caughtRecords[codexKey] = { size: size, count: 1, firstDay: getDayKey() };
-    } else {
-      let rec = state.caughtRecords[codexKey];
-      if (size > rec.size) rec.size = size;
-      rec.count += 1;
-    }
-    let newFish = { name: fish.name, size: size, price: fish.price, shape: fish.shape, color: fish.color, time: state.totalMinutes || 0, rot: 0, isDried: false, tags: fish.tags, seasons: fish.seasons || [], frozen: false };
-    let slots = getFishSlots(size);
-    if (state.pain >= 60 && Math.random() < 0.2) {
-      addLog(`[疼痛] 手疼没抓稳，${fish.name} 挣扎掉落！`, "log-err");
-      $('fishLog').textContent = `手疼没抓稳，${size}cm 的 ${fish.name} 掉回了水里…`;
-      addStats(2, 1);
-    } else if (getBagUsed() + slots <= state.bagCap) {
-      state.fishBag.push(newFish);
-      addLog(`[结果] 成功！放入鱼篓。`, "log-ok");
-      $('fishLog').textContent = `成功钓上 ${size}cm 的 ${fish.name}！已放入鱼篓。`;
-    } else {
-      addLog(`[结果] 成功但鱼篓满了，鱼跑了。`, "log-err");
-      $('fishLog').textContent = `钓上一条 ${size}cm 的 ${fish.name}，但鱼篓满了，只好扔掉了...`;
-    }
-    let fat=0, st=0;
-    if(size<20){ fat=0; st=-1; } else if(size<50){ fat=1; st=-2; } else if(size<90){ fat=3; st=-3; } else { fat=8; st=-5; }
-    let isMutated = fish.tags && fish.tags.includes("mutated");
-    if (isMutated) {
-      st += 5;
-      addStats(fat, st, 5, 0);
-      state.inv.lines[state.eq.line] = Math.max(0, state.inv.lines[state.eq.line] - 1);
-      addLog(`[变异] 电击！疼痛+5，压力额外+5，鱼线损毁1根。`, "log-err");
-    } else {
-      addStats(fat, st);
-    }
-    addLog(`[结算] 疲劳+${fat}，压力${st}。`, "log-sys");
-  } else {
-    let extra = ""; let isHeavy = fish.tags && fish.tags.includes('heavy'); let isSeafood = fish.tags && fish.tags.includes('seafood');
-    if (isSeafood) {
-      if (fish.name.includes('蟹') || fish.name.includes('龙虾')) { addStats(0, 0, 5, 0); extra += "【钳伤】疼痛+5。"; }
-      else if (fish.name.includes('章鱼') || fish.name.includes('鱿鱼')) {
-        const nowM = state.totalMinutes || 0;
-        if (!state.inkPenalty) state.inkPenalty = { stacks: 0, loc: null, until: 0 };
-        const ink = state.inkPenalty;
-        if (ink.stacks > 0 && ink.loc === state.loc && nowM < ink.until) ink.stacks += 1;
-        else { ink.stacks = 1; ink.loc = state.loc; }
-        ink.until = nowM + 30;
-        extra += `【喷墨】本水域30分钟内下次抛竿惩罚骰 -${ink.stacks}。`;
-      }
-      else if (fish.name.includes('海胆')) { addStats(0, 5, 10, 0); extra += "【刺伤】疼痛+10，压力+5。"; }
-    }
-    if (isHeavy) {
-      addStats(10, 0, 10, 0); state.inv.lines[state.eq.line] = Math.max(0, state.inv.lines[state.eq.line] - 1); extra += " 【极重】必定断线！";
-      let rBreak = state.eq.rod === 'wood' ? 0.5 : (state.eq.rod === 'fiberglass' ? 0.3 : 0.2);
-      if (Math.random() < rBreak) { state.inv.rods[state.eq.rod] = Math.max(0, state.inv.rods[state.eq.rod] - 1); extra += " 鱼竿折断了！"; }
-      addLog(`[极重] 疲劳+10，疼痛+10，断线！${extra}`, "log-err");
-    } else if (size >= 90) {
-      if (Math.random() < LINES[state.eq.line].breakBig) { state.inv.lines[state.eq.line] = Math.max(0, state.inv.lines[state.eq.line] - 1); extra += " 【特大】鱼线崩断！"; }
-      else {
-        let rBreak = state.eq.rod === 'wood' ? 0.3 : (state.eq.rod === 'fiberglass' ? 0.1 : 0);
-        if (Math.random() < rBreak) { state.inv.rods[state.eq.rod] = Math.max(0, state.inv.rods[state.eq.rod] - 1); extra += " 【特大】鱼竿折断！"; }
-        else extra += " 【特大】线竿保住，鱼跑了。";
-      }
-      addLog(`[特大] 触发断线/断竿判定。${extra}`, "log-err");
-    }
-    let fat=0, st=0;
-    if (size >= 50 && !isHeavy) { fat=5; st=2; } else if (size >= 20 && size < 50) { fat=1; st=1; }
-    let isMutated = fish.tags && fish.tags.includes("mutated");
-    if (isMutated) { st += 5; extra += " 【变异】电击！疼痛+5，压力额外+5。"; }
-    addStats(fat, st, isMutated ? 5 : 0, 0);
-    addLog(`[结果] 脱钩。疲劳+${fat}，压力+${st}。${extra}`, "log-err");
-    $('fishLog').textContent = `一条 ${size}cm 的 ${fish.name} 脱钩跑了... ${extra}`;
-    updateHUD();
-  }
-
-  // 结算章月钓鱼
-  if (state.hasMiniRod && (state.takotsukiCount + state.takotsukiTank) > 0) {
-      if (Math.random() < 0.4) { // 40%概率触发章月事件，避免太刷屏
-          let zLuck = rnd(1, 100);
-          if (zLuck <= 90) { // 幸运90，大概率咬钩
-              let zPe = rnd(1, 100);
-              if (zPe <= 40) { // 体育40，大概率脱钩
-                  addLog(`[章月] 旁边水花四溅，它钓上了一条小鱼，开心地扔进了你的鱼篓。`, "log-ok");
-                  toast("章月帮你钓上了一条鱼！");
-                  // 随机给一条普通鱼
-                  let zFish = FISH_DB[state.loc][0]; 
-                  state.fishBag.push({...zFish, size: rnd(zFish.min, zFish.max), time: state.totalMinutes});
-              } else {
-                  // 被拖下水
-                  addLog(`[章月] 它被大鱼拖进了水里，咕噜咕噜地求救！`, "log-err");
-                  showDialog("章月落水", "takotsuki", "章月被一条巨大的黑影猛地拽向深水，它死死抱着迷你鱼竿，向你投来求助的豆豆眼。", [
-                      { txt: "花5分钟救它", fn: () => {
-                          closeDialog(); addTime(5); state.takotsukiAffinity = clamp(state.takotsukiAffinity + 2, 0, 100);
-                          toast("你把它捞了上来，亲密度 +2。");
-                      }},
-                      { txt: "不管它", fn: () => {
-                          closeDialog();
-                          if (state.takotsukiAffinity >= 60) {
-                              toast("它委屈巴巴地自己爬了上来。");
-                          } else {
-                              if (state.takotsukiCount > 0) state.takotsukiCount -= 1;
-                              else state.takotsukiTank -= 1;
-                              state.hasMiniRod = false;
-                              toast("章月沉了下去...（数量 -1，迷你鱼竿损毁）");
-                          }
-                          updateHUD();
-                      }}
-                  ]);
-              }
-          } else {
-              addLog(`[章月] 它还在那咕噜咕噜地盯着水面，一无所获。`, "log-sys");
+      // 章月捣乱判定
+      let idleTakotsuki = state.takotsukiCount;
+      if (state.hasMiniRod && state.takotsukiCount > 0) idleTakotsuki -= 1;
+      
+      if (idleTakotsuki > 0) {
+          let attackProb = idleTakotsuki * 5;
+          if (rnd(1, 100) <= attackProb) {
+              addTime(30);
+              state.springDrug = clamp(state.springDrug + (10 * idleTakotsuki), 0, 100);
+              addStats(0, 10);
+              state.takotsukiAffinity = clamp(state.takotsukiAffinity + (2 * idleTakotsuki), 0, 100);
+              addLog(`[打断] 没在钓鱼的章月突然袭击了你，春药值大幅增加！`, "log-err");
+              showDialog("章月的恶作剧", "takotsuki", `你刚抛出鱼竿，几只没在钓鱼的小章鱼突然顺着你的手臂缠了上来，触手直接钻进了衣服里……\n\n你被折腾得手脚发软，根本没心思看浮标。`, [
+                  { txt: "好不容易挣脱", fn: () => { closeDialog(); $('fishLog').textContent = "你被章月打断了，根本没钓到鱼。"; updateHUD(); }}
+              ]);
+              return;
           }
       }
+
+      let luckPool = BAITS[eq.bait].pool;
+      if (state.displayWeather === "rain_light") luckPool += 1;
+      if (state.displayWeather === "rain_heavy" || state.displayWeather === "thunder") luckPool -= 1;
+      if (state.inkPenalty && state.inkPenalty.stacks > 0) {
+          const ink = state.inkPenalty;
+          if (ink.loc === state.loc && (state.totalMinutes || 0) < ink.until) luckPool -= ink.stacks;
+          ink.stacks = 0; ink.loc = null; ink.until = 0;
+      }
+      
+      let zyBonus = state.takotsukiCount * 5;
+      let currentLuck = 60 + zyBonus;
+      let luckCheck = checkLuck(currentLuck, luckPool);
+      
+      if (luckCheck.level === "失败") {
+          mainWaitTime = 30; 
+          addLog(`[渔获-幸运] 空军。耗时 30 分钟，压力 +1。`, "log-err");
+          G.pendingFish = null; 
+      } else {
+          mainWaitTime = luckCheck.wait;
+          let rarRes = pickRarity(luckCheck.level);
+          if (isUsingEgg) {
+              if (rarRes.chosen === "common") rarRes.chosen = "uncommon";
+              else if (rarRes.chosen === "uncommon") rarRes.chosen = "rare";
+              else if (rarRes.chosen === "rare") rarRes.chosen = "epic";
+          }
+          let fishPool = buildFishPool(state.loc, rarRes.chosen, state.season, state.displayWeather, state.hour);
+          if (state.displayWeather === "thunder") fishPool.push({ name: "雷击变异鱼", min: 20, max: 100, price: 10.0, color: "#e0c080", shape: "normal", rarity: rarRes.chosen, tags: ["mutated", "seafood"], seasons: [], weight: 1 });
+          
+          if (fishPool.length === 0) fishPool = buildFishPool(state.loc, "common", state.season, state.displayWeather, state.hour);
+          if (state.takotsukiCount > 0) {
+              let filteredPool = fishPool.filter(f => !f.tags || !f.tags.includes("takotsuki"));
+              if (filteredPool.length > 0) fishPool = filteredPool;
+          }
+          let fish = drawFromPool(fishPool);
+          let size = rnd(fish.min, fish.max);
+          if (state.displayWeather === "rain_heavy") size = Math.max(size, 20);
+          G.pendingFish = { fish, size };
+      }
+  } else {
+      mainWaitTime = 30;
+      G.pendingFish = null; 
+      addLog(`[杂物] 耗时 30 分钟。`, "log-dice");
   }
+
+  // 2. 判定章月时间
+  let zyWaitTime = 99;
+  let hasPreviousZY = (G.zyState === 'waiting');
+  
+  if (!hasPreviousZY) {
+      G.zyState = 'idle';
+      if (state.hasMiniRod && state.takotsukiCount > 0) {
+          if (state.totalMinutes < G.zyRecoverTime) {
+              addLog(`[章月] 它还在水底挣扎着往上爬，这回合无法帮忙钓鱼。`, "log-sys");
+          } else {
+              let zLuckRoll = rnd(1, 100);
+              if (zLuckRoll <= 90) {
+                  if (zLuckRoll === 1) zyWaitTime = 0;
+                  else if (zLuckRoll <= 18) zyWaitTime = 7;
+                  else if (zLuckRoll <= 45) zyWaitTime = 15;
+                  else zyWaitTime = 30;
+                  
+                  G.zyFish = FISH_DB[state.loc][rnd(0, FISH_DB[state.loc].length - 1)];
+                  G.zyState = 'waiting';
+              } else {
+                  addLog(`[章月] 章月还在那咕噜咕噜地盯着水面，一无所获。`, "log-sys");
+              }
+          }
+      }
+  } else {
+      // 如果上一竿有遗留，将本竿时间作为基准，但优先结算它
+      zyWaitTime = 0; 
+  }
+
+  // 3. 执行时间轴
+  if (isJunk || !G.pendingFish) {
+      // 杂物 / 空军：不走复杂交错，直接推进主角时间
+      addTime(mainWaitTime);
+      if (isJunk) {
+          let luckRoll = rollD100(0);
+          if (luckRoll.result > 60) {
+              addStats(1.5, 1);
+              $('fishLog').textContent = "你钓上来一团水草和垃圾，只好扔掉了。";
+          } else {
+              let tier = "垃圾"; let price = 0;
+              if (luckRoll.result === 1) { tier = "epic"; price = rnd(500, 999); }
+              else if (luckRoll.result <= 12) { tier = "rare"; price = rnd(200, 400); }
+              else if (luckRoll.result <= 30) { tier = "uncommon"; price = rnd(50, 100); }
+              else { tier = "common"; price = rnd(5, 20); }
+              if (getBagUsed() >= state.bagCap) $('fishLog').textContent = "捞上东西了，但鱼篓满了装不下！";
+              else {
+                  let tName = TREASURE_DB[tier][rnd(0, TREASURE_DB[tier].length - 1)];
+                  state.treasureBag.push({ name: tName, price: price, rarity: tier });
+                  addStats(1.5, -3);
+                  $('fishLog').textContent = `捞上来一件【${tName}】！已放入鱼篓。`;
+              }
+          }
+      } else {
+          addStats(1.5, 1);
+          $('fishLog').textContent = "等了很久，浮标毫无动静，空军了。";
+      }
+      
+      // 结算上一轮遗留的章月（或本轮章月没耗时的）
+      if (G.zyState === 'waiting') {
+          addTime(G.zyWait);
+          processZhangyueEvent(0);
+      } else {
+          updateControls();
+      }
+      return;
+  }
+
+  // 主角有鱼，且章月也咬钩了
+  if (G.zyState === 'waiting' && zyWaitTime < mainWaitTime) {
+      addTime(zyWaitTime);
+      let remainMain = mainWaitTime - zyWaitTime;
+      processZhangyueEvent(remainMain);
+      return;
+  } else {
+      addTime(mainWaitTime);
+      if (G.zyState === 'waiting') {
+          G.zyWait = zyWaitTime - mainWaitTime; 
+      }
+      G.fishState = "bite";
+      $('fishLog').textContent = "咬钩了！快提竿！";
+      $('btnFishMain').textContent = "提 竿 !";
+      $('btnFishMain').classList.add('danger');
+  }
+}
+
+// ==================== 提竿 ====================
+function strikeFish() {
+  G.fishState = "idle"; $('btnFishMain').textContent = "抛 竿"; $('btnFishMain').classList.remove('danger');
+  
+  if (G.pendingFish) {
+      let { fish, size } = G.pendingFish; 
+      G.pendingFish = null;
+      addLog(`-------------------- 提竿判定 --------------------`, "log-sys");
+      
+      let peTarget = state.stats.pe;
+      let req = "常规";
+      if (size >= 90) { peTarget = Math.floor(peTarget / 5); req = "极难"; }
+      else if (size >= 50) { peTarget = Math.floor(peTarget / 2); req = "困难"; }
+      
+      let painPenalty = 0;
+      if (state.pain >= 60) painPenalty = -2;
+      else if (state.pain >= 30) painPenalty = -1;
+      
+      if (state.fatigue >= 85 && size >= 50) peTarget = Math.floor(peTarget / 2);
+      
+      let pullTime = (size >= 20 && size < 50) ? 10 : 0;
+      addTime(pullTime);
+      let pePool = painPenalty; 
+      if (state.displayWeather === "rain_heavy" || state.displayWeather === "fog" || state.displayWeather === "snow" || state.displayWeather === "thunder") pePool -= 1;
+      if (state.eq.rod === "fiberglass") pePool += 1;
+      if (state.eq.rod === "carbon_rod") pePool += 1;
+      
+      let success = true;
+      if (size >= 20) {
+        if (state.eq.rod === "carbon_rod") peTarget += 10;
+        let peRoll = rollD100(pePool);
+        success = (peRoll.result <= peTarget);
+        addLog(`[体育] 需【${req}成功】，目标 ≤${peTarget}。${peRoll.detail} → ${success ? '成功' : '失败'}`, success ? "log-ok" : "log-err");
+      }
+      
+      if (success) {
+        if (fish.tags && fish.tags.includes("takotsuki")) {
+            state.takotsukiCount += 1;
+            state.takotsukiTime = state.totalMinutes;
+            if (state.takotsukiAffinity === 0) state.takotsukiAffinity = 10;
+            addLog(`[奇遇] 钓上了一只灰色小章鱼！已自动携带。`, "log-ok");
+            let desc = !state.takotsukiMet ? "你钓上来一只软趴趴的灰色小章鱼。它用堇色的豆豆眼无辜地看着你，触手紧紧抱着鱼钩不放。\n\n你从没见过这种生物。" : "你又钓上来一只灰色小章鱼。它轻车熟路地顺着鱼线爬到了你身上，似乎早就认识你。";
+            state.takotsukiMet = true;
+            showDialog(!state.takotsukiMet ? "奇妙的邂逅" : "熟悉的触感", "takotsuki", desc + "\n\n（它会一直黏在你身上，注意在24小时内把它放到孤儿院的鱼缸里，否则它会干瘪消失！）", [
+                { txt: "由它黏着吧", fn: () => { 
+                    closeDialog(); toast("章月黏在了你身上。"); 
+                    resolveZhangyueAfterMain();
+                }}
+            ]);
+            return; 
+        }
+        
+        let codexKey = state.loc + "_" + fish.name;
+        if (!state.caughtRecords) state.caughtRecords = {};
+        if (!state.caughtRecords[codexKey]) state.caughtRecords[codexKey] = { size: size, count: 1, firstDay: getDayKey() };
+        else {
+          let rec = state.caughtRecords[codexKey];
+          if (size > rec.size) rec.size = size;
+          rec.count += 1;
+        }
+        
+        let newFish = { name: fish.name, size: size, price: fish.price, shape: fish.shape, color: fish.color, time: state.totalMinutes || 0, rot: 0, isDried: false, tags: fish.tags, seasons: fish.seasons || [], frozen: false };
+        let slots = getFishSlots(size);
+        
+        if (state.pain >= 60 && Math.random() < 0.2) {
+          addLog(`[疼痛] 手疼没抓稳，${fish.name} 挣扎掉落！`, "log-err");
+          $('fishLog').textContent = `手疼没抓稳，${size}cm 的 ${fish.name} 掉回了水里…`;
+          addStats(2, 1);
+        } else if (getBagUsed() + slots <= state.bagCap) {
+          state.fishBag.push(newFish);
+          $('fishLog').textContent = `成功钓上 ${size}cm 的 ${fish.name}！已放入鱼篓。`;
+        } else {
+          $('fishLog').textContent = `钓上一条 ${size}cm 的 ${fish.name}，但鱼篓满了，只好扔掉了...`;
+        }
+        let fat=0, st=0;
+        if(size<20){ fat=0; st=-1; } else if(size<50){ fat=1; st=-2; } else if(size<90){ fat=3; st=-3; } else { fat=8; st=-5; }
+        let isMutated = fish.tags && fish.tags.includes("mutated");
+        if (isMutated) {
+          st += 5;
+          addStats(fat, st, 5, 0);
+          state.inv.lines[state.eq.line] = Math.max(0, state.inv.lines[state.eq.line] - 1);
+        } else {
+          addStats(fat, st);
+        }
+      } else {
+        let extra = ""; 
+        addStats(1, 2); 
+        $('fishLog').textContent = `一条 ${size}cm 的 ${fish.name} 脱钩跑了... ${extra}`;
+      }
+  }
+  
+  resolveZhangyueAfterMain();
+}
+
+// 辅助函数：主角提竿后，处理章月的后续
+function resolveZhangyueAfterMain() {
+    updateHUD();
+    if (G.zyState === 'waiting') {
+        // 章月比主角晚，或者上回合遗留的
+        addTime(G.zyWait);
+        processZhangyueEvent(0); 
+    } else {
+        updateControls();
+    }
 }
 
 function triggerDebtEvent() {
@@ -3288,6 +3473,35 @@ function importSave(e) {
   };
   reader.readAsText(file); e.target.value = '';
 }
+function copySaveText() {
+    try {
+        let str = btoa(encodeURIComponent(JSON.stringify(state))); // 压缩成 Base64 字符串
+        navigator.clipboard.writeText(str).then(() => {
+            toast("存档已复制！请发到微信或备忘录保存。");
+        }).catch(() => {
+            prompt("复制失败，请手动复制以下文本：", str);
+        });
+    } catch(e) {
+        toast("生成存档文本失败");
+    }
+}
+
+function pasteSaveText() {
+    let str = prompt("请粘贴你复制的存档文本：");
+    if (!str) return;
+    try {
+        let json = decodeURIComponent(atob(str.trim()));
+        let data = JSON.parse(json);
+        if (data.money !== undefined) {
+            if(!confirm("确定要覆盖当前进度吗？")) return;
+            state = Object.assign(state, migrateState(data));
+            updateHUD(); updateControls();
+            toast("文本存档导入成功！");
+        }
+    } catch(e) {
+        toast("无效的存档文本，请检查是否复制完整！");
+    }
+}
 
 // 新增：提取兼容逻辑（加强版）
 function migrateState(data) {
@@ -3355,6 +3569,176 @@ function saveGame() {
         localStorage.setItem('yuedu_save_data', JSON.stringify(state));
     } catch (e) { console.log("自动保存失败", e); }
 }
+
+// ================= 多槽位存读档系统 =================
+function getSaveDescription() {
+    let locName = LOCATIONS[state.loc] ? LOCATIONS[state.loc].name : "未知地点";
+    let desc = `你正身处【${locName}】。`;
+    
+    // 根据状态动态生成描述
+    if (state.wombEggs > 0) {
+        desc += `腹中隐隐有什么在蠕动……`;
+    } else if (state.springDrug >= 70) {
+        desc += `身体深处一阵燥热难耐……`;
+    } else if (state.fatigue >= 80) {
+        desc += `你累得连眼皮都快抬不起来了。`;
+    } else if (state.trauma >= 60) {
+        desc += `脑海中挥之不去的阴影让你瑟瑟发抖。`;
+    } else {
+        desc += `天气${WEATHER_NAMES[state.displayWeather] || '晴朗'}，目前身上有 ${state.money} 元。`;
+    }
+    return desc;
+}
+
+function openSaveLoad() {
+    renderSaveSlots();
+    $('ovSaveLoad').classList.add('show');
+}
+
+function renderSaveSlots() {
+    const body = $('saveSlotBody');
+    body.innerHTML = '';
+    
+    for (let i = 1; i <= 10; i++) {
+        let dataStr = localStorage.getItem('yuedu_save_slot_' + i);
+        let data = null;
+        try { if (dataStr) data = JSON.parse(dataStr); } catch(e) {}
+        
+        const row = document.createElement('div');
+        row.className = "save-row";
+        
+        // 顶部行，允许折行，防止手机端挤爆
+        const top = document.createElement('div');
+        top.style.cssText = "display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:4px;";
+        
+        const btnGroup = document.createElement('div');
+        btnGroup.style.cssText = "display:flex; align-items:center; gap:6px; flex-wrap:wrap;";
+        
+        const idSpan = document.createElement('div');
+        idSpan.className = "save-id";
+        idSpan.style.width = "auto";
+        idSpan.textContent = `槽 ${i}`;
+        btnGroup.appendChild(idSpan);
+        
+        const saveBtn = document.createElement('button');
+        saveBtn.className = "btn-save btn-sm";
+        saveBtn.textContent = "保存";
+        if (state.isBadEnd) {
+            saveBtn.disabled = true;
+        } else {
+            saveBtn.onclick = () => saveToSlot(i);
+        }
+        btnGroup.appendChild(saveBtn);
+        
+        if (data && data.state && data.timestamp) {
+            const loadBtn = document.createElement('button');
+            loadBtn.className = "btn-load btn-sm";
+            loadBtn.textContent = "读取";
+            loadBtn.onclick = () => loadFromSlot(i);
+            btnGroup.appendChild(loadBtn);
+            
+            // 新增改名按钮
+            const renameBtn = document.createElement('button');
+            renameBtn.className = "btn-sm";
+            renameBtn.style.background = "var(--dim)"; // 灰色
+            renameBtn.textContent = "改名";
+            renameBtn.onclick = () => renameSlot(i);
+            btnGroup.appendChild(renameBtn);
+
+            const delBtn = document.createElement('button');
+            delBtn.className = "btn-del btn-sm";
+            delBtn.textContent = "删除";
+            delBtn.onclick = () => deleteSlot(i);
+            btnGroup.appendChild(delBtn);
+        }
+        
+        top.appendChild(btnGroup);
+        
+        if (data && data.timestamp) {
+            const timeSpan = document.createElement('div');
+            timeSpan.className = "save-time";
+            timeSpan.style.margin = "0";
+            timeSpan.textContent = data.timestamp;
+            top.appendChild(timeSpan);
+        }
+        
+        row.appendChild(top);
+        
+        // 描述内容（如果有自定义名字，会以金色粗体显示在前面）
+        const descDiv = document.createElement('div');
+        descDiv.className = "save-desc";
+        descDiv.style.marginTop = "6px";
+        if (data && data.desc) {
+            let nameStr = data.name ? `<b style="color:var(--gold); font-size:13px; margin-right:6px;">【${data.name}】</b>` : "";
+            descDiv.innerHTML = `${nameStr}${data.desc}`;
+        } else {
+            descDiv.style.color = "var(--dim)";
+            descDiv.textContent = "空槽位（点击上方保存按钮记录当前进度）";
+        }
+        row.appendChild(descDiv);
+        
+        body.appendChild(row);
+    }
+}
+
+function saveToSlot(index) {
+    const now = new Date();
+    const timeStr = `${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+    
+    // 尝试读取旧档的名字，覆盖保存时不丢失自定义命名
+    let existingName = "";
+    try {
+        let oldData = JSON.parse(localStorage.getItem('yuedu_save_slot_' + index));
+        if (oldData && oldData.name) existingName = oldData.name;
+    } catch(e){}
+
+    const saveData = {
+        name: existingName,
+        timestamp: timeStr,
+        desc: getSaveDescription(),
+        state: state // 直接保存当前 state
+    };
+    
+    try {
+        localStorage.setItem('yuedu_save_slot_' + index, JSON.stringify(saveData));
+        toast(`已保存至槽位 ${index}`);
+        renderSaveSlots(); // 刷新界面
+    } catch(e) {
+        toast("保存失败，本地空间可能已满");
+    }
+}
+function loadFromSlot(index) {
+    let dataStr = localStorage.getItem('yuedu_save_slot_' + index);
+    if (!dataStr) return;
+    try {
+        let saveObj = JSON.parse(dataStr);
+        if (saveObj.state && saveObj.state.money !== undefined) {
+            if (!confirm(`确定要读取槽位 ${index} 的存档吗？\n当前未保存的进度将丢失。`)) return;
+            
+            // 覆盖当前 state，并且执行一次兼容
+            state = Object.assign(state, migrateState(saveObj.state));
+            
+            // 重置一些运行时的临时变量
+            G = { schStep: 0, isFishing: false, fishState: "idle", pendingFish: null, inClass: false, pendingDetention: false, moving: false, iceBroken: false };
+            
+            // 刷新UI并关窗
+            document.getElementById('ovSaveLoad').classList.remove('show');
+            updateHUD(); 
+            updateControls();
+            toast(`已读取槽位 ${index} 的存档`);
+        }
+    } catch(e) {
+        toast("读取失败，存档已损坏");
+    }
+}
+
+function deleteSlot(index) {
+    if (!confirm(`确定要删除槽位 ${index} 的存档吗？此操作无法撤销。`)) return;
+    localStorage.removeItem('yuedu_save_slot_' + index);
+    toast(`已删除槽位 ${index}`);
+    renderSaveSlots();
+}
+// ==================================================
 
 function loadGame() {
   try {
