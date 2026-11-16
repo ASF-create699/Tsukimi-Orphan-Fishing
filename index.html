@@ -1664,7 +1664,7 @@ function updateControls() {
   }
   if (state.loc === "hospital") {
     addBtn("治疗疼痛 (50元)", () => { if (state.money >= 50) { state.money -= 50; state.pain = 0; toast("疼痛完全恢复了"); updateHUD(); } });
-    addBtn("心理咨询 (100元)", () => { if (state.money >= 100) { state.money -= 100; addStats(0, -20, 0, -10); toast("创伤和压力减轻了"); updateHUD(); } });
+    addBtn("心理咨询 (300元, 1h)", () => { if (state.money >= 300) { state.money -= 300; addTime(60); addStats(0, -20, 0, -10); toast("咨询了一小时，创伤和压力减轻了"); updateHUD(); updateControls(); } });
     
     // === 新增：服用精神药物 ===
     addBtn("服用精神药物 (200元)", () => { 
