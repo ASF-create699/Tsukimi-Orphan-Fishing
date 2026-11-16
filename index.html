@@ -439,7 +439,7 @@ const HELP_TEXT = {
     
     <b>🥚 产卵与孵化</b><br>
     夜袭结束时，如果春药值 ≥ 60，体内会被注入【章月卵】（3天倒计时）。<br>
-    可以在孤儿院用【科学】检定把卵取出来，取出的卵是<b>顶级鱼饵</b>（必定咬钩、稀有度提升、提竿必定成功）。<br>
+    可以在孤儿院用【科学】检定把卵取出来，取出的卵是<b>顶级鱼饵</b>（能大幅提升钓到稀有鱼类的概率）。<br>
     若放任不管，3天后卵会在体内强制孵化！如果鱼缸有空位，数量+1；没空位则幼体流失。<br><br>
     
     <b>🧪 黏液变现</b><br>
@@ -2963,7 +2963,10 @@ function castLine() {
   let eq = state.eq;
   if (!RODS[eq.rod] || state.inv.rods[eq.rod] <= 0) { toast("没有鱼竿！"); return; }
   if (!LINES[eq.line] || state.inv.lines[eq.line] <= 0) { toast("没有鱼线！"); return; }
-  if (!BAITS[eq.bait] || state.inv.baits[eq.bait] <= 0) { toast("没有鱼饵！"); return; }
+  // 如果有章月卵，即使没有普通鱼饵也可以抛竿（稍后会弹窗询问）
+  if ((!BAITS[eq.bait] || state.inv.baits[eq.bait] <= 0) && state.takotsukiEgg <= 0) { 
+      toast("没有鱼饵！"); return; 
+  }
   
   // 高疲劳与重疼痛判定
   if (state.fatigue >= 85 && Math.random() < 0.3) {
@@ -2979,7 +2982,7 @@ function castLine() {
   if (state.takotsukiEgg > 0 && !G.useEggPrompt) {
       G.useEggPrompt = true;
       showDialog("使用章月卵？", "takotsuki", `你身上还有 ${state.takotsukiEgg} 枚章月卵。\n它散发的特殊气味能吸引最稀有的鱼类。要使用 1 枚作为鱼饵吗？`, [
-          { txt: "使用 (必定提竿成功)", cls: "danger", fn: () => {
+          { txt: "使用 (自动提升稀有度)", cls: "danger", fn: () => {
               state.takotsukiEgg -= 1;
               G.forceEggBite = true;
               closeDialog();
@@ -3016,10 +3019,18 @@ function castLine() {
   let branch = rnd(1, 100);
   let isJunk = (branch <= 20);
   
+  // 章月卵特权：必定不会钓到杂物
+  if (isUsingEgg) isJunk = false;
+  
   if (!isJunk) {
-      state.inv.baits[eq.bait]--;
+      if (isUsingEgg) {
+          // 使用了章月卵，不再消耗普通鱼饵
+          addLog(`[渔获] 章月卵散发的奇异香气引来了鱼群，未消耗普通鱼饵。`, "log-sys");
+      } else {
+          state.inv.baits[eq.bait]--;
+          addLog(`[渔获] 消耗 1 份 ${BAITS[eq.bait].name}。`);
+      }
       buildFishPanelUI(); updateHUD();
-      addLog(`[渔获] 消耗 1 份 ${BAITS[eq.bait].name}。`);
 
       // 章月捣乱判定
       let idleTakotsuki = state.takotsukiCount;
