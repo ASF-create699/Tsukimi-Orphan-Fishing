@@ -3181,7 +3181,7 @@ function init() {
   }
   updateHUD(); updateControls(); render();
   if (!state.introDone) {
-    showDialog("选择难度", "none", "欢迎来到《月都孤儿·钓鱼生存》！\n\n【普通模式】标准规则：债务2000封顶，买断需100,000元。\n\n【困难模式】商店物价×1.5，睡眠恢复×0.75；Sirei的债务在2000之后继续每周+1000（直至10,000封顶），但买断债务只需50,000元。", [
+    showDialog("选择难度", "none", "欢迎来到《月都孤儿·钓鱼生存》！\n\n【普通模式】标准规则：债务2000封顶，买断需100,000元。\n\n【困难模式】商店物价×1.5，睡眠恢复×0.75；Sirei的债务在2000之后继续每周+1000（直至10,000封顶），买断债务需要500,000元。", [
       { txt: "普通模式", fn: () => { state.difficulty = 'normal'; startIntro(); } },
       { txt: "困难模式", cls: "danger", fn: () => { state.difficulty = 'hard'; startIntro(); } }
     ]);
