@@ -301,7 +301,7 @@
           <button class="btn-sm" style="flex:1; background:#5b8ec9;" onclick="pasteSaveText()">粘贴读取存档</button>
         </div>
         <!-- 第三排：删档重开 -->
-        <button class="btn-sm" style="background:var(--red); width:100%;" onclick="if(confirm('确定要彻底删除进度重新开始吗？')){ Object.keys(localStorage).forEach(key => { if (key.startsWith('yuedu_save_')) localStorage.removeItem(key); }); location.reload(); }">删除所有存档并重开</button>
+        <button class="btn-sm" style="background:var(--red); width:100%;" onclick="if(confirm('确定要删除当前进度并重新开始吗？\n\n（注：内置槽位的存档不会受影响，可在💾存档中找回）')){ localStorage.removeItem('yuedu_save_data'); location.reload(); }">删除当前进度重开</button>
       </div>
     </div>
   </div>
