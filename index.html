@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#f4efe3">
-<title>月都孤儿 · 钓鱼生存 v0.2.15</title>
+<title>月都孤儿 · 钓鱼生存 v0.2.16</title>
 <style>
   :root {
     --bg: #f4efe3; --panel: #fffdf5; --panel2: #f7f1e1;
@@ -1375,7 +1375,45 @@ function updateControls() {
                     updateHUD(); updateControls();
                 }, "cold");
             } else {
-                addBtn(`🐙 鱼缸已满 (${state.takotsukiTank}/${state.tankCap})`, () => toast("鱼缸装不下了，去购物中心升级吧！"), "ghost");
+                let isMaxTank = state.tankLevel >= 3;
+                addBtn(isMaxTank ? `🐙 鱼缸已满（${state.takotsukiTank}/${state.tankCap}，已达最大）` : `🐙 鱼缸已满（${state.takotsukiTank}/${state.tankCap}）`, () => {
+                    if (isMaxTank) {
+                        showDialog("鱼缸已满", "takotsuki", `鱼缸已经是最大容量了，可身上还挂着 ${state.takotsukiCount} 只章月。\n\n它们用小触手不安地蹭着你的手指，似乎在问“我们住哪儿”。\n\n鱼缸已经没法再扩容了，只能把它们放生到水域里。`, [
+                            { txt: "去森林湖放生", fn: () => {
+                                closeDialog();
+                                let dist = DISTANCES.orphanage.forest;
+                                state.loc = "forest";
+                                addTime(dist);
+                                addStats(dist / 10, dist / 20);
+                                updateHUD(); updateControls();
+                                toast(`跋涉了 ${dist} 分钟，来到了森林湖。点击放生按钮即可安置它们。`);
+                            }},
+                            { txt: "去海滩放生", fn: () => {
+                                closeDialog();
+                                let dist = DISTANCES.orphanage.beach;
+                                state.loc = "beach";
+                                addTime(dist);
+                                addStats(dist / 10, dist / 20);
+                                updateHUD(); updateControls();
+                                toast(`跋涉了 ${dist} 分钟，来到了海滩。点击放生按钮即可安置它们。`);
+                            }},
+                            { txt: "算了，再想想", fn: closeDialog }
+                        ]);
+                    } else {
+                        showDialog("鱼缸已满", "takotsuki", `鱼缸已经塞满了，可身上还挂着 ${state.takotsukiCount} 只章月。\n\n它们用小触手不安地蹭着你的手指，似乎在问“我们住哪儿”。\n\n或许该换个大点的鱼缸了……`, [
+                            { txt: "去购物中心升级鱼缸", fn: () => {
+                                closeDialog();
+                                let dist = DISTANCES.orphanage.mall;
+                                state.loc = "mall";
+                                addTime(dist);
+                                addStats(dist / 10, dist / 20);
+                                updateHUD(); updateControls();
+                                toast(`跋涉了 ${dist} 分钟，来到了购物中心。`);
+                            }},
+                            { txt: "算了，再想想", fn: closeDialog }
+                        ]);
+                    }
+                }, "ghost");
             }
         } else {
             addBtn("🐙 需要买鱼缸", () => toast("去购物中心买一个鱼缸才能养它们。"), "ghost");
@@ -1677,23 +1715,42 @@ function updateControls() {
   if (state.loc === "beach" || state.loc === "forest") {
     // 放生按钮
     if (state.takotsukiCount > 0) {
-        addBtn("放生携带的章月", () => {
-            showDialog("放生", "takotsuki", "你要把身上的章月放回这片水域吗？\n\n（放生会降低亲密度）", [
-                { txt: "确认放生", cls: "danger", fn: () => {
-                    state.takotsukiCount -= 1;
-                    if (state.takotsukiCount <= 0) {
+        let isTankFull = state.tankCap > 0 && state.takotsukiTank >= state.tankCap;
+        let isMaxTank = state.tankLevel >= 3;
+        if (isTankFull && isMaxTank) {
+            // 满级鱼缸满了：一次性放生全部，不扣亲密度
+            addBtn(`🐙 放生溢出的章月 ×${state.takotsukiCount}（不扣亲密度）`, () => {
+                let count = state.takotsukiCount;
+                showDialog("放生", "takotsuki", `鱼缸已经装不下了，你只能把这 ${count} 只章月放回水里。\n\n它们顺着你的手指滑入水中，小触手依依不舍地蹭了蹭你的指尖，留下一道湿润的痕迹，然后缓缓游向深处，消失在水草间……\n\n（因为鱼缸已满且无法再扩容，它们理解你的难处，亲密度未下降）`, [
+                    { txt: `放生全部 ${count} 只`, cls: "ghost", fn: () => {
                         state.takotsukiCount = 0;
-                        state.takotsukiAffinity = 0;
-                        toast("你把手里的章月放回了水里，它带着所有记忆游走了。");
-                    } else {
-                        state.takotsukiAffinity = clamp(state.takotsukiAffinity - 15, 0, 100);
-                        toast("你放生了一只章月，其他的看起来有点委屈。");
-                    }
-                    closeDialog(); updateHUD(); updateControls();
-                }},
-                { txt: "算了", fn: closeDialog }
-            ]);
-        }, "warn");
+                        closeDialog();
+                        toast(`放生了 ${count} 只章月，它们依依不舍地游走了。`);
+                        updateHUD(); updateControls();
+                    }},
+                    { txt: "算了，带回去再想想", fn: closeDialog }
+                ]);
+            }, "ghost");
+        } else {
+            // 原逻辑：一只一只放，扣 15
+            addBtn("放生携带的章月", () => {
+                showDialog("放生", "takotsuki", "你要把身上的章月放回这片水域吗？\n\n（放生会降低亲密度）", [
+                    { txt: "确认放生", cls: "danger", fn: () => {
+                        state.takotsukiCount -= 1;
+                        if (state.takotsukiCount <= 0) {
+                            state.takotsukiCount = 0;
+                            state.takotsukiAffinity = 0;
+                            toast("你把手里的章月放回了水里，它带着所有记忆游走了。");
+                        } else {
+                            state.takotsukiAffinity = clamp(state.takotsukiAffinity - 15, 0, 100);
+                            toast("你放生了一只章月，其他的看起来有点委屈。");
+                        }
+                        closeDialog(); updateHUD(); updateControls();
+                    }},
+                    { txt: "算了", fn: closeDialog }
+                ]);
+            }, "warn");
+        }
     }
     if (!G.isFishing) {
       // 冬季森林湖且未破冰
