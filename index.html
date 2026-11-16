@@ -259,6 +259,7 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div>🐙 章月亲密度: <b id="sTakotsukiAffinity" style="color:var(--accent);">0</b></div>
         <div>💊 春药值: <b id="sSpringDrug" style="color:var(--red);">0</b></div>
+        <div>💉 药物积累: <b id="sDrugAcc" style="color:var(--gold);">0</b></div>
       </div>
       <hr style="border:0;border-top:1px dashed var(--line);margin:6px 0;">
       <div><b>物资与装备</b></div>
@@ -857,6 +858,9 @@ let state = {
   inkPenalty: { stacks: 0, loc: null, until: 0 },
   caughtRecords: {},
   lastRunDayKey: -1,
+  drugWithdrawDays: 0, // 精神药物戒断剩余天数
+  drugDelayDays: 0,    // 戒断推迟的天数
+  drugAccumulation: 0, // 药物积累值 (0-100)
   debtStrikes: 0,         // 债务违约/反抗失败次数
   hasIcePick: false,
   takotsukiCount: 0,      // 身上携带的数量
@@ -1011,6 +1015,7 @@ function updateHUD() {
   if ($('sTakotsukiAffinity')) {
       $('sTakotsukiAffinity').textContent = state.takotsukiAffinity;
       $('sSpringDrug').textContent = state.springDrug;
+      if ($('sDrugAcc')) $('sDrugAcc').textContent = state.drugAccumulation;
       // 春药值大于等于60时标红警告
       if (state.springDrug >= 60) {
           $('sSpringDrug').style.color = "var(--gold)";
@@ -1058,6 +1063,28 @@ function addTime(mins) {
     state.mainWeather = rollMainWeather();
     addLog(`[天气] 新的一天(${state.month}月${state.day}日)，季节：${state.season}，主天气：${WEATHER_NAMES[state.mainWeather]}`, "log-sys");
     G.inClass = false; G.pendingDetention = false;
+    
+    // 药物积累值衰减
+    if (state.drugAccumulation > 0) {
+        state.drugAccumulation = Math.max(0, state.drugAccumulation - 2);
+    }
+
+    // 推迟戒断的反扑
+    if (state.drugDelayDays > 0) {
+        state.drugDelayDays--;
+        if (state.drugDelayDays === 0) {
+            state.drugWithdrawDays = 2; // 反扑
+            addLog(`[戒断] 被推迟的痛苦终于反扑了！`, "log-err");
+            toast("你感觉脑子一阵刺痛，戒断反应重新袭来！");
+        }
+    } else if (state.drugWithdrawDays > 0) {
+        state.drugWithdrawDays--;
+        state.stress = clamp(state.stress + 5, 0, 100);
+        addLog(`[戒断] 药物效果消退，你感到一阵莫名的焦虑（压力+5）。剩余天数：${state.drugWithdrawDays}`, "log-err");
+        if (state.drugWithdrawDays === 0) {
+            toast("戒断反应终于结束了，你长舒一口气。");
+        }
+    }
   }
   if (state.attendedDayKey !== currDayKey) {
     state.classAttended = [false, false, false, false, false, false];
@@ -1213,8 +1240,8 @@ function checkEvents() {
   }
   if (todayKey < state.nextDebtDay) G.debtChecked = false;
 
-  // 新增：早上8点后如果在孤儿院且有违纪，且今天还没被打过，则触发责打
-  if (state.loc === "orphanage" && state.violations > 0 && state.hour >= 8 && state.lastBeatenDayKey !== todayKey) {
+  // 【修复】早上9点后如果在孤儿院且有违纪，且今天还没被打过，则触发责打（赶路时绝不触发）
+  if (!G.moving && state.loc === "orphanage" && state.violations > 0 && state.hour >= 9 && state.lastBeatenDayKey !== todayKey) {
     setTimeout(checkSireiBeating, 0);
   }
 }
@@ -1468,6 +1495,47 @@ function updateControls() {
   if (state.loc === "hospital") {
     addBtn("治疗疼痛 (50元)", () => { if (state.money >= 50) { state.money -= 50; state.pain = 0; toast("疼痛完全恢复了"); updateHUD(); } });
     addBtn("心理咨询 (100元)", () => { if (state.money >= 100) { state.money -= 100; addStats(0, -20, 0, -10); toast("创伤和压力减轻了"); updateHUD(); } });
+    
+    // === 新增：服用精神药物 ===
+    addBtn("服用精神药物 (200元)", () => { 
+        if (state.money >= 200) { 
+            state.money -= 200; 
+            
+            // 增加积累值
+            state.drugAccumulation = clamp(state.drugAccumulation + 25, 0, 100);
+            
+            // 判定幻觉
+            if (state.drugAccumulation >= 100) {
+                triggerHallucination(); 
+                return;
+            }
+            
+            // 药效全额生效
+            state.trauma = clamp(state.trauma - 40, 0, 100);
+            state.stress = clamp(state.stress - 20, 0, 100);
+            state.fatigue = clamp(state.fatigue + 40, 0, 100);
+            
+            // 戒断判定
+            if (state.drugWithdrawDays > 0) {
+                state.drugWithdrawDays = 0;
+                state.drugDelayDays = 2;
+                addLog(`[服药-推迟] 强行压制了当前痛苦，戒断反应将在2天后反扑。积累值：${state.drugAccumulation}`, "log-err");
+                showDialog("精神药物", "none", "你迫不及待地吞下药片，试图把那种万蚁噬心的戒断感压下去。\n\n药效确实起效了，但你感觉脑子里似乎有什么东西在融化……（戒断反应推迟2天）", [
+                    { txt: "长舒一口气", fn: () => { closeDialog(); updateHUD(); updateControls(); } }
+                ]);
+            } else {
+                state.drugWithdrawDays = 2;
+                addLog(`[服药] 服用了精神药物，创伤-40，疲劳+40。积累值：${state.drugAccumulation}`, "log-sys");
+                showDialog("精神药物", "none", "你吞下药片，世界的噪音瞬间远去，痛苦似乎被隔绝了。但这只是暂时的麻痹……", [
+                    { txt: "感觉好多了", fn: () => { closeDialog(); updateHUD(); updateControls(); } }
+                ]);
+            }
+        } else {
+            toast("钱不够，你买不起药。");
+        }
+    }, "warn");
+    // ==========================
+
     addBtn("找面影歪医生", openDoctor, "danger");
   }
   if (state.loc === "museum") {
@@ -1538,13 +1606,14 @@ function updateControls() {
       b.textContent = `去${LOCATIONS[k].name} (${dist}m)`;
       b.onclick = () => {
         G.inClass = false; G.moving = true;
+        state.loc = k; // 【修复】先改变地点，防止在路上被判定在孤儿院挨打
         addTime(dist);
         G.moving = false;
         addStats(dist / 10, dist / 20);
-        state.loc = k; G.isFishing = false; G.fishState = "idle"; G.pendingFish = null;
+        G.isFishing = false; G.fishState = "idle"; G.pendingFish = null;
         G.iceBroken = false; // 离开水域，冰面重置
         if (k === "orphanage") checkSireiBeating();
-        updateHUD();  // 移动后刷新 HUD（冰箱按钮显隐）
+        updateHUD();
         toast(`跋涉了 ${dist} 分钟。`); updateControls();
       };
       c.appendChild(b);
@@ -2183,7 +2252,12 @@ function startNormalSleep() {
       if (state.hasAlarm && state.alarmHour !== -1 && state.hour === state.alarmHour) { forceWake = true; wakeReason = "闹钟响了，你从睡梦中惊醒。"; }
       if (!forceWake && state.fatigue <= 0) { forceWake = true; wakeReason = "你睡到自然醒，疲劳完全恢复了。"; }
       let rec = BED_RECOVERY[state.bedLevel || 0];
-      addStats(rec.fat, rec.stress, rec.pain, rec.trauma);
+      if (state.drugWithdrawDays > 0) {
+          // 戒断期间睡眠恢复减半
+          addStats(Math.round(rec.fat / 2), rec.stress, 0, rec.trauma);
+      } else {
+          addStats(rec.fat, rec.stress, 0, rec.trauma);
+      }
       if (forceWake) { textLog = wakeReason; break; }
       if (hoursSlept > 24) break;
     }
@@ -2221,8 +2295,6 @@ function chooseLateSchool() {
 }
 
 function startSchoolLate() {
-  state.violations += 1;
-  addLog(`[违纪] 迟到进入教室，违纪+1。`, "log-err");
   G.inClass = true;
   
   let cur = state.hour * 60 + state.minute;
@@ -2873,10 +2945,83 @@ function triggerTrueEnd() {
     }}
   ]);
 }
+function triggerHallucination() {
+    const steps = [
+        "你在柔软的床上醒来，阳光透过窗户洒在脸上。厨房里传来了煎蛋的香气，妈妈温柔地喊你起床。",
+        "走出门，你的青梅竹马嘉琉亚已经在门口等着你了。路上又遇到了你难搞的恋人苍月卫人，他因为你今天先和嘉琉亚一起走了开始乱吃飞醋，嘉琉亚在一旁捂着嘴笑。",
+        "放学后，嘉琉亚提议今天要不要去海边，苍月虽然嘴上抱怨着，却还是跟在了你们身后。你抛出鱼竿，和恋人与朋友一起闲适地等待鱼儿上钩。",
+        "在学校的日常一如既往，同学们在教室里吵吵闹闹，丸子和大铃木又在拌嘴，厄师寺在鼓励银崎做肌肉特训，今马依旧不允许其他人说他妹妹的一句坏话，面影在角落里摆弄着奇怪的仪器，苍月坐在角落安静地看书。",
+        "回家后，鱼缸里几只可爱的灰色小章鱼冲着你吐着泡泡。你想着今晚该给它们钓点什么好吃的……"
+    ];
+
+    let currentStep = 0;
+
+    const playStep = () => {
+        if (currentStep < steps.length) {
+            showDialog("美好的日常", "none", steps[currentStep], [
+                { txt: "继续……", fn: () => {
+                    closeDialog();
+                    currentStep++;
+                    setTimeout(playStep, 300); 
+                }}
+            ]);
+        } else {
+            // 第一步：无立绘出场
+            showDialog("世界的裂缝", "none", "就在这时，面影歪不知何时出现在了你面前。他那副总是似笑非笑的表情消失了，认真地盯着你的眼睛，声音仿佛从很远的地方传来……", [
+                { txt: "看向他", fn: () => {
+                    closeDialog();
+                    // 第二步：带立绘说话与抉择
+                    setTimeout(() => {
+                        showDialog("面影歪", "omokage", "「拓海君……你觉得，这样就好了吗？」", [
+                            { txt: "「是的，这样就很好。」", cls: "ghost", fn: () => {
+                                closeDialog();
+                                triggerBadEnd("hallucination");
+                            }},
+                            { txt: "「……你是谁？这里不是我的世界。」", cls: "danger", fn: () => {
+                                closeDialog();
+                                wakeUpFromHallucination();
+                            }}
+                        ]);
+                    }, 300);
+                }}
+            ]);
+        }
+    };
+
+    playStep();
+}
+
+function wakeUpFromHallucination() {
+    // 幻境碎裂，现实结算
+    state.money = 0;
+    state.stress = 50;
+    state.trauma = 50;
+    state.fatigue = 50;
+    state.drugAccumulation = 0;
+    state.drugWithdrawDays = 0;
+    state.drugDelayDays = 0;
+    
+    // 强制推进到下周日
+    state.day += 7;
+    if (state.day > 30) { state.day -= 30; state.month++; }
+    state.weekday = 0; // 周日
+    state.hour = 7; 
+    state.minute = 0;
+    state.nextDebtDay = getDayKey() + 7; // 下周日才收，给玩家一周喘息时间
+    state.loc = "orphanage"; 
+    
+    updateHUD(); 
+    updateControls();
+    
+    showDialog("清醒", "none", "你死死盯着面影歪，察觉到了致命的违和感。你猛地推开窗户——眼前的阳光、大海、同学，连同那几只小章鱼，都像玻璃一样碎裂开来，化作无尽的黑暗。\n\n你猛地睁开眼睛，刺鼻的消毒水味涌入鼻腔。你躺在孤儿院的床上，身边没有妈妈，没有嘉琉亚，也没有同学。\n\n护士冷漠的话语回荡在耳边：「你药物过量昏迷了整整一周，住院费已经把你所有的积蓄扣光了。」\n\n（今天是周日早晨7点，Sirei 下周日才会来收债……）", [
+        { txt: "面对惨淡的现实", fn: () => { closeDialog(); updateHUD(); updateControls(); } }
+    ]);
+}
+
 function triggerBadEnd(type) {
   state.isBadEnd = true; let title = "Bad End", desc = "";
   if (type === "debt" || type === "fight") { title = "【Bad End】 被抛弃的人"; desc = "电棍的剧痛让你失去了意识。醒来时，你已经是个奴隶了。"; }
-  else if (type === "trauma") { title = "【Bad End】 破碎的灵魂"; desc = "接连不断的打击摧毁了你的精神，你被送进了精神病院。"; }
+  else if (type === "trauma") { title = "【Bad End】 破碎的灵魂"; desc = "接连不断的打击摧毁了你的精神，你被送进了精神病院。"; }  else if (type === "hallucination") { title = "【Bad End】 沉溺幻象"; desc = "你移开了视线，回避了面影歪的质问。\n\n你笑着向苍月伸出手，决定永远留在这个充满阳光的午后。幻觉如同温暖的深海将你包裹，你放弃了挣扎，任由自己在这虚假的温柔中永远地沉没。"; }
   showDialog(title, "none", desc, [{ txt: "重新开始", fn: () => location.reload() }]); updateControls();
 }
 function showDialog(title, portraitType, text, buttons) {
@@ -2967,6 +3112,9 @@ function migrateState(data) {
     if (data.hasMiniRod === undefined) data.hasMiniRod = false;
     if (data.hasIcePick === undefined) data.hasIcePick = false;
     // 处理鱼缸超载：如果旧档鱼缸里的数量大于新容量，超出的部分转移到身上携带
+    if (data.drugAccumulation === undefined) data.drugAccumulation = 0;
+    if (data.drugWithdrawDays === undefined) data.drugWithdrawDays = 0;
+    if (data.drugDelayDays === undefined) data.drugDelayDays = 0;
     if (data.takotsukiTank > data.tankCap) {
         let overflow = data.takotsukiTank - data.tankCap;
         data.takotsukiTank = data.tankCap;
