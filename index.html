@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#f4efe3">
-<title>月都孤儿 · 钓鱼生存 v0.3.4</title>
+<title>月都孤儿 · 钓鱼生存 v0.3.6</title>
 <style>
   :root {
     --bg: #f4efe3; --panel: #fffdf5; --panel2: #f7f1e1;
@@ -734,6 +734,94 @@ function drawPortrait(type) {
     pctx.fillRect(1.5*S, 21*S, S, S);
     pctx.fillRect(0.5*S, 18*S, S, 3*S);
     pctx.fillRect(1.5*S, 17*S, S, S);
+  } else if (type === 'takotsuki_cry') {
+    pctx.clearRect(0, 0, 96, 96);
+    pctx.imageSmoothingEnabled = false;
+    // 头部高光与轮廓
+    pctx.fillStyle = "#b0b0b0";
+    pctx.fillRect(3*S, 7*S, 18*S, S);
+    pctx.fillRect(4*S, 6*S, 16*S, S);
+    pctx.fillRect(5*S, 5*S, 14*S, S);
+    pctx.fillRect(7*S, 4*S, 10*S, S);
+    pctx.fillRect(9*S, 3*S, 6*S, S);
+    pctx.fillRect(2*S, 9*S, S, 6*S);
+    pctx.fillRect(21*S, 9*S, S, 6*S);
+
+    // 头部基础色
+    pctx.fillStyle = "#9e9e9e";
+    pctx.fillRect(3*S, 8*S, 18*S, 9*S);
+    pctx.fillRect(5*S, 6*S, 14*S, 11*S);
+    pctx.fillRect(4*S, 7*S, 16*S, 10*S);
+    pctx.fillRect(7*S, 5*S, 10*S, S);
+    pctx.fillRect(9*S, 4*S, 6*S, S);
+    pctx.fillRect(2*S, 10*S, S, 6*S);
+    pctx.fillRect(21*S, 10*S, S, 6*S);
+
+    // 眼睛
+    pctx.fillStyle = "#7376b9";
+    pctx.fillRect(6*S, 10*S, 3*S, 3*S);
+    pctx.fillRect(15*S, 10*S, 3*S, 3*S);
+    pctx.fillStyle = "#ffffff";
+    pctx.fillRect(7*S, 10*S, 1*S, 1*S);
+    pctx.fillRect(16*S, 10*S, 1*S, 1*S);
+    // 泪光
+    pctx.fillStyle = "#93bcfb";
+    pctx.fillRect(5.5*S, 12.5*S, 2*S, 1*S);
+    pctx.fillRect(16.5*S, 12.5*S, 2*S, 1*S);
+
+    // 睫毛
+    pctx.fillStyle = "#333333";
+    pctx.fillRect(5*S, 9*S, 1*S, 1*S);
+    pctx.fillRect(7*S, 8*S, 1*S, 1*S);
+    pctx.fillRect(9*S, 9*S, 1*S, 1*S);
+    pctx.fillRect(14*S, 9*S, 1*S, 1*S);
+    pctx.fillRect(16*S, 8*S, 1*S, 1*S);
+    pctx.fillRect(18*S, 9*S, 1*S, 1*S);
+
+    // 眼镜纹路
+    pctx.strokeStyle = "#7a7a7a";
+    pctx.lineWidth = 2;
+    pctx.beginPath(); pctx.arc(7.5*S, 11.5*S, 3*S, 0, Math.PI); pctx.stroke();
+    pctx.beginPath(); pctx.arc(16.5*S, 11.5*S, 3*S, 0, Math.PI); pctx.stroke();
+    pctx.beginPath(); pctx.moveTo(10.5*S, 12*S); pctx.lineTo(13.5*S, 12*S); pctx.stroke();
+
+    // 委屈的嘴巴（∧形）
+    pctx.strokeStyle = "#000000";
+    pctx.beginPath(); pctx.moveTo(11*S, 14*S); pctx.lineTo(12*S, 13*S); pctx.lineTo(13*S, 14*S);
+    pctx.stroke();
+
+    // 触手
+    pctx.fillStyle = "#8f8f8f";
+    pctx.fillRect(1.5*S, 17*S, 21*S, 4*S);
+    pctx.fillRect(13.5*S, 21*S, 4*S, S);
+    pctx.fillRect(6.5*S, 21*S, 4*S, S);
+    pctx.fillRect(18.5*S, 21*S, 3*S, S);
+    pctx.fillRect(2.5*S, 21*S, 3*S, S);
+    pctx.fillRect(13.5*S, 16*S, 4*S, S);
+    pctx.fillRect(6.5*S, 16*S, 4*S, S);
+    pctx.fillRect(18.5*S, 16*S, 3*S, S);
+    pctx.fillRect(2.5*S, 16*S, 3*S, S);
+
+    pctx.fillStyle = "#7f7f7f";
+    pctx.fillRect(11.5*S, 17*S, S, 4*S);
+    pctx.fillRect(12.5*S, 21*S, S, S);
+    pctx.fillRect(10.5*S, 21*S, S, S);
+    pctx.fillRect(13.5*S, 22*S, 4*S, S);
+    pctx.fillRect(6.5*S, 22*S, 4*S, S);
+    pctx.fillRect(17.5*S, 21*S, S, S);
+    pctx.fillRect(18.5*S, 18*S, S, 3*S);
+    pctx.fillRect(17.5*S, 17*S, S, S);
+    pctx.fillRect(5.5*S, 21*S, S, S);
+    pctx.fillRect(4.5*S, 18*S, S, 3*S);
+    pctx.fillRect(5.5*S, 17*S, S, S);
+    pctx.fillRect(18.5*S, 22*S, 3*S, S);
+    pctx.fillRect(2.5*S, 22*S, 3*S, S);
+    pctx.fillRect(21.5*S, 21*S, S, S);
+    pctx.fillRect(22.5*S, 18*S, S, 3*S);
+    pctx.fillRect(21.5*S, 17*S, S, S);
+    pctx.fillRect(1.5*S, 21*S, S, S);
+    pctx.fillRect(0.5*S, 18*S, S, 3*S);
+    pctx.fillRect(1.5*S, 17*S, S, S);
   }
 }
 function drawFishIcon(ctx, shape, color) {
@@ -1368,8 +1456,9 @@ function addTime(mins) {
   if (state.takotsukiCount > 0 && (state.totalMinutes - state.takotsukiTime > 1440)) {
       state.takotsukiCount = 0;
       state.takotsukiAffinity = Math.max(0, state.takotsukiAffinity - 20);
+      G.zyState = 'idle'; G.zyFish = null; G.zyWait = 0;
       addLog(`[章月] 因为没有及时补充水分，身上的章月干瘪消失了...`, "log-err");
-      showDialog("章月消失", "none", "由于你太久没有把它们放进水里，黏在你身上的章月慢慢失去了水分，化作一滩水渍消失了……\n\n（亲密度大幅下降）", [
+      showDialog("章月消失", "takotsuki_cry", "由于你太久没有把它们放进水里，黏在你身上的章月慢慢失去了水分，化作一滩水渍消失了……\n\n（亲密度大幅下降）", [
           { txt: "我真是个糟糕的主人...", fn: () => { closeDialog(); updateHUD(); } }
       ]);
   }
@@ -1863,7 +1952,7 @@ function updateControls() {
             // 满级鱼缸满了：一次性放生全部，不扣亲密度
             addBtn(`🐙 放生溢出的章月 ×${state.takotsukiCount}（不扣亲密度）`, () => {
                 let count = state.takotsukiCount;
-                showDialog("放生", "takotsuki", `鱼缸已经装不下了，你只能把这 ${count} 只章月放回水里。\n\n它们顺着你的手指滑入水中，小触手依依不舍地蹭了蹭你的指尖，留下一道湿润的痕迹，然后缓缓游向深处，消失在水草间……\n\n（因为鱼缸已满且无法再扩容，它们理解你的难处，亲密度未下降）`, [
+                showDialog("放生", "takotsuki_cry", `鱼缸已经装不下了，你只能把这 ${count} 只章月放回水里。\n\n它们顺着你的手指滑入水中，小触手依依不舍地蹭了蹭你的指尖，留下一道湿润的痕迹，然后缓缓游向深处，消失在水草间……\n\n（因为鱼缸已满且无法再扩容，它们理解你的难处，亲密度未下降）`, [
                     { txt: `放生全部 ${count} 只`, cls: "ghost", fn: () => {
                         state.takotsukiCount = 0;
                         closeDialog();
@@ -1876,12 +1965,13 @@ function updateControls() {
         } else {
             // 原逻辑：一只一只放，扣 15
             addBtn("放生携带的章月", () => {
-                showDialog("放生", "takotsuki", "你要把身上的章月放回这片水域吗？\n\n（放生会降低亲密度）", [
+                showDialog("放生", "takotsuki_cry", "你要把身上的章月放回这片水域吗？\n\n（放生会降低亲密度）", [
                     { txt: "确认放生", cls: "danger", fn: () => {
                         state.takotsukiCount -= 1;
                         if (state.takotsukiCount <= 0) {
                             state.takotsukiCount = 0;
                             state.takotsukiAffinity = 0;
+                            G.zyState = 'idle'; G.zyFish = null; G.zyWait = 0;
                             toast("你把手里的章月放回了水里，它带着所有记忆游走了。");
                         } else {
                             state.takotsukiAffinity = clamp(state.takotsukiAffinity - 15, 0, 100);
@@ -1905,7 +1995,7 @@ function updateControls() {
           }, "danger");
       }
     } else {
-      addBtn("结束钓鱼", () => { G.isFishing = false; G.fishState = "idle"; G.pendingFish = null; updateControls(); }, "ghost");
+      addBtn("结束钓鱼", () => { G.isFishing = false; G.fishState = "idle"; G.pendingFish = null; G.zyState = 'idle'; G.zyFish = null; G.zyWait = 0; updateControls(); }, "ghost");
     }
   }
   if (state.loc === "forest") {
@@ -1942,6 +2032,7 @@ function updateControls() {
         G.moving = false;
         addStats(dist / 10, dist / 20);
         G.isFishing = false; G.fishState = "idle"; G.pendingFish = null;
+        G.zyState = 'idle'; G.zyFish = null; G.zyWait = 0;
         G.iceBroken = false; // 离开水域，冰面重置
         if (k === "orphanage") checkSireiBeating();
         updateHUD();
@@ -2537,7 +2628,7 @@ function triggerNightAttack() {
             // 成功推开
             let newAff = Math.max(0, state.takotsukiAffinity - 3);
             state.takotsukiAffinity = newAff;
-            showDialog("反抗成功", "none", "你咬着牙，一把扯开了缠在腰间的触手。黑暗中的触手停顿了一下，随后委屈地缩了回去。", [
+            showDialog("反抗成功", "takotsuki_cry", "你咬着牙，一把扯开了缠在腰间的触手。黑暗中的触手停顿了一下，随后委屈地缩了回去。", [
                 { txt: "继续睡", fn: () => { 
                     closeDialog();
                     state.springDrug = clamp(state.springDrug + 5, 0, 100);
@@ -2887,14 +2978,14 @@ function processZhangyueEvent(mainRemainTime = 0) {
                 }}
             ]);
         } else {
-            showDialog("章月上鱼", "takotsuki", `章月钓上了一条 ${size}cm 的【${fish.name}】，但你的鱼篓已经装不下了，它只能委屈地把它扔回了水里。`, [
+            showDialog("章月上鱼", "takotsuki_cry", `章月钓上了一条 ${size}cm 的【${fish.name}】，但你的鱼篓已经装不下了，它只能委屈地把它扔回了水里。`, [
                 { txt: "没办法", fn: () => { closeDialog(); advanceMainTime(); }}
             ]);
         }
     } else if (size >= 50) {
         // 大鱼脱钩 -> 落水
         addLog(`[章月] 大鱼体型过大，章月被拖入水中！`, "log-err");
-        showDialog("章月落水", "takotsuki", "章月被一条巨大的黑影猛地拽向深水，它死死抱着迷你鱼竿，向你投来求助的豆豆眼。", [
+        showDialog("章月落水", "takotsuki_cry", "章月被一条巨大的黑影猛地拽向深水，它死死抱着迷你鱼竿，向你投来求助的豆豆眼。", [
             { txt: "花5分钟去捞", fn: () => {
                 closeDialog();
                 addTime(5);
@@ -2947,7 +3038,7 @@ function processZhangyueEvent(mainRemainTime = 0) {
     } else {
         // 普通鱼脱钩 -> 跑了
         addLog(`[章月] 力量不足，普通鱼脱钩跑了。`, "log-err");
-        showDialog("章月脱钩", "takotsuki", `章月那边的水面扑腾了一下，一条 ${size}cm 的【${fish.name}】挣脱了它的触手，溜走了……\n\n它委屈巴巴地卷着空鱼钩看着你。`, [
+        showDialog("章月脱钩", "takotsuki_cry", `章月那边的水面扑腾了一下，一条 ${size}cm 的【${fish.name}】挣脱了它的触手，溜走了……\n\n它委屈巴巴地卷着空鱼钩看着你。`, [
             { txt: "摸摸它", fn: () => { 
                 closeDialog(); 
                 advanceMainTime();
@@ -3095,14 +3186,26 @@ function castLine() {
       addLog(`[杂物] 耗时 30 分钟。`, "log-dice");
   }
 
-  // 2. 判定章月时间
+  // 2. 判定章月时间（三态：有章月有竿 / 有章月无竿 / 无章月）
   let zyWaitTime = 99;
-  let hasPreviousZY = (G.zyState === 'waiting');
-  let zyStatusText = "章月没有带鱼竿";
+  let zyStatusText = "";
   
-  if (!hasPreviousZY) {
+  if (state.takotsukiCount <= 0) {
+      // 无章月：强制清空残留状态，不显示任何章月字样
       G.zyState = 'idle';
-      if (state.hasMiniRod && state.takotsukiCount > 0) {
+      G.zyFish = null;
+      G.zyWait = 0;
+  } else if (!state.hasMiniRod) {
+      // 有章月但没迷你鱼竿：不参与，仅提示
+      G.zyState = 'idle';
+      G.zyFish = null;
+      G.zyWait = 0;
+      zyStatusText = "章月没有鱼竿";
+  } else {
+      // 有章月 + 有迷你鱼竿：正常章月钓鱼流程
+      let hasPreviousZY = (G.zyState === 'waiting');
+      if (!hasPreviousZY) {
+          G.zyState = 'idle';
           if (state.totalMinutes < G.zyRecoverTime) {
               addLog(`[章月] 它还在水底挣扎着往上爬，这回合无法帮忙钓鱼。`, "log-sys");
               zyStatusText = "章月还在水里扑腾";
@@ -3123,11 +3226,11 @@ function castLine() {
                   zyStatusText = "章月那边没动静";
               }
           }
+      } else {
+          // 如果上一竿有遗留，将本竿时间作为基准，但优先结算它
+          zyWaitTime = 0; 
+          zyStatusText = "章月还在咕嘟咕嘟地盯着水面";
       }
-  } else {
-      // 如果上一竿有遗留，将本竿时间作为基准，但优先结算它
-      zyWaitTime = 0; 
-      zyStatusText = "章月还在咕嘟咕嘟地盯着水面";
   }
 
   // 3. 执行时间轴
@@ -3180,12 +3283,7 @@ function castLine() {
           G.zyWait = zyWaitTime - mainWaitTime; 
       }
       G.fishState = "bite";
-      // 如果章月还在等，主界面体现出来
-      if (G.zyState === 'waiting') {
-          $('fishLog').textContent = `你咬钩了！快提竿！ (${zyStatusText})`;
-      } else {
-          $('fishLog').textContent = `你咬钩了！快提竿！ (${zyStatusText})`;
-      }
+      $('fishLog').textContent = zyStatusText ? `你咬钩了！快提竿！ (${zyStatusText})` : "你咬钩了！快提竿！";
       $('btnFishMain').textContent = "提 竿 !";
       $('btnFishMain').classList.add('danger');
   }
@@ -3486,7 +3584,7 @@ function triggerBadEnd(type) {
 }
 function showDialog(title, portraitType, text, buttons) {
   $('dlgTitle').textContent = title;
-  if (portraitType === 'sirei' || portraitType === 'takumi' || portraitType === 'omokage' || portraitType === 'takotsuki') {
+  if (portraitType === 'sirei' || portraitType === 'takumi' || portraitType === 'omokage' || portraitType === 'takotsuki' || portraitType === 'takotsuki_cry') {
     $('dlgPortraitBox').style.display = 'flex'; drawPortrait(portraitType); $('dlgText').textContent = text; $('dlgBody').textContent = "";
   } else {
     $('dlgPortraitBox').style.display = 'none'; $('dlgBody').textContent = text;
