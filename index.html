@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#f4efe3">
-<title>月都孤儿 · 钓鱼生存 v0.3.6</title>
+<title>月都孤儿 · 钓鱼生存 v0.3.7</title>
 <style>
   :root {
     --bg: #f4efe3; --panel: #fffdf5; --panel2: #f7f1e1;
@@ -384,6 +384,455 @@
 <div id="toast"></div>
 
 <script>
+/* ===== FISH_ART v1 · 图鉴立绘引擎（只管画，不碰任何游戏数值） =====
+ * 来源：月都孤儿·鱼类特征搭配器（32x32 逻辑网格，体型/鳍/花纹可变）
+ * 桥接：drawFishIcon 增加第 4 参 name；传了鱼名 -> 画该鱼的专属立绘；
+ *       不传或没配 -> 原版 drawFishIconLegacy 逐像素不变。
+ * 章月 / 灰色小章鱼：不在此名单内，永远走原分支，一行未动。
+ */
+/* ============================================================
+ * 鱼类图鉴 · 特征搭配器 核心逻辑（纯函数，无 DOM 依赖）
+ * ------------------------------------------------------------
+ * buildFish(spec) -> { grid, pixels }
+ *   grid[r][c] = 调色板 key 或 null
+ *   pixels     = [{x,y,key}] 便于统计/测试
+ * 设计要点：体型轮廓(silhouette)是可变参数，不同体型产出不同
+ * 半高曲线，从根上避免“一个菱形刷不同漆”。
+ * ============================================================ */
+(function (root, factory) {
+  if (typeof module !== 'undefined' && module.exports) module.exports = factory();
+  else root.FishCore = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  var G = 32; // 逻辑网格 32x32
+
+  // ---- 调色板：由主色派生暗/亮/点缀 ----
+  function clamp(v){ return Math.max(0, Math.min(255, v|0)); }
+  function shade(hex, amt){ // amt: -1..1
+    var h = hex.replace('#','');
+    var r = parseInt(h.substr(0,2),16), g = parseInt(h.substr(2,2),16), b = parseInt(h.substr(4,2),16);
+    if (amt < 0){ var k = 1 + amt; r*=k; g*=k; b*=k; }
+    else { r += (255-r)*amt; g += (255-g)*amt; b += (255-b)*amt; }
+    return '#' + [clamp(r),clamp(g),clamp(b)].map(function(x){var s=x.toString(16);return s.length<2?'0'+s:s;}).join('');
+  }
+  function palette(main, accent){
+    return {
+      dark:  shade(main, -0.35),
+      main:  main,
+      light: shade(main,  0.30),
+      belly: shade(main,  0.55),
+      accent: accent || shade(main, 0.45),
+      fin: shade(accent || main, 0.28),
+      eye: '#1a1a1a', white: '#f4f4ec'
+    };
+  }
+
+  /* ---- 体型轮廓：返回 t(0头..1尾) 处的半高系数(0..1) ----
+   * 每个体型一条明显不同的曲线，这是“不像同一个模子”的关键 */
+  var SILHOUETTES = {
+    spindle:  { h:0.30, peak:0.30, w:1.00, nose:'point',  tail:'thin', flatTop:0.00 }, // 纺锤 金枪/旗鱼
+    deep:     { h:0.44, peak:0.32, w:0.95, nose:'blunt',  tail:'thin', flatTop:0.55 }, // 侧扁·上端较平 鲫/鲤
+    pomfret:  { h:0.54, peak:0.40, w:0.90, nose:'blunt',  tail:'thin', flatTop:0.15 }, // 高体菱形 鲳
+    elongate: { h:0.30, peak:0.36, w:0.90, nose:'round',  tail:'thin', flatTop:0.00 }, // 细长 草/梭
+    eel:      { h:0.16, peak:0.44, w:0.55, nose:'point',  tail:'taper',flatTop:0.00 }, // 鳗形 鳗/鳝
+    globular: { h:0.44, peak:0.48, w:0.80, nose:'blunt',  tail:'stub', flatTop:0.00 }, // 圆胖 河鲀
+    flat:     { h:0.20, peak:0.34, w:1.00, nose:'blunt',  tail:'thin', flatTop:0.00 }, // 扁平 鳐/鲽
+    // 鲷形(罗非/鲷/黑鲷/真鲷)：头前上方倾斜明显 + 腹部近水平、近尾处向上收 + 背线平缓 → 头身近似平行四边形
+    bream:    { h:0.38, peak:0.30, w:0.95, nose:'round',  tail:'thin', flatTop:0.00, bellyFlat:0.62, bellyLift:0.30, headPow:1.5, flatBack:0.80, breamShape:true,
+                 headT:0.26, tailT:0.78, noseTop:-0.42, noseBot:0.66, ped:0.20, backArch:0.02, noBaseCol:true, tailLift:0 }
+  };
+
+  // 半高曲线：峰值前移 + 尾部收柄，非对称
+  function halfProfile(t, s){
+    var p = s.peak;
+    var base;
+    // 鲷形专用：头前缘斜切(额头缓升) + 长平背 + 晚收尾柄 → 头身近似平行四边形
+    if (s.breamShape){
+      if (t < p){ base = Math.pow(t/p, s.headPow || 1.5); }
+      else { base = Math.pow(Math.max(0, 1 - (t-p)/(1-p)), 1.1); }
+      if (s.flatBack && t >= p && t <= s.flatBack) base = Math.max(base, 0.94);
+      if (s.tail === 'thin' && t > 0.85) base *= (1 - (t-0.85)/0.15) * 0.5 + 0.5;
+      return Math.max(0.04, base) * s.h;
+    }
+    if (t < p){ base = Math.pow(t/p, 0.85); }        // 头->最宽：略凸，钝头更饱满
+    else { base = Math.pow(1 - (t-p)/(1-p), 1.5); }   // 最宽->尾柄：收细
+    // flatTop：在峰后一段保持接近满高，形成“上端较平”的背（鲫/鲤）
+    if (s.flatTop && t >= p && t <= p + s.flatTop){
+      var k = 1 - (t - p) / s.flatTop;   // 1->0
+      base = base + (1 - base) * k * 0.85;
+    }
+    // 尾柄再压细（除鳗形/圆胖）——保留约55%宽，不再细成线
+    if (s.tail === 'thin' && t > 0.82) base *= (1 - (t-0.82)/0.18) * 0.45 + 0.55;
+    if (s.tail === 'stub' && t > 0.78) base *= 0.6;
+    if (s.tail === 'taper') base = base * 0.9 + 0.08; // 鳗：几乎不收
+    return Math.max(0.04, base) * s.h;
+  }
+  // 鲷形：腹部近水平、靠近尾部向上收（尾柄抬高）；返回该 t 处中心线下移量(px)
+  function bellyDrop(t, s, halfPx){
+    if (!s.bellyFlat) return 0;
+    var p = s.peak;
+    var flatEnd = p + s.bellyFlat;                 // 腹部保持平直到的位置
+    var lift = s.bellyLift || 0.3;
+    var drop;
+    if (t <= flatEnd){ drop = 0; }                 // 腹线近水平
+    else {                                          // 之后向上收，直到尾柄抬到 body*lift
+      var k = (t - flatEnd) / Math.max(0.01, (1 - flatEnd));
+      drop = -halfPx * lift * k;                    // 负值=腹部上抬
+    }
+    if (t < p){                                     // 头部前上方倾斜：头前段腹线略抬高
+      var hk = (p - t) / p;
+      drop -= halfPx * (s.headSlope || 0) * hk * hk;
+    }
+    return drop;
+  }
+
+  // 鲷形专用：平行四边形几何 —— 头前缘斜切(吻在前偏下,额头斜后上)+背线走平+腹线走平+尾柄收口
+  function breamOffsets(t, s){
+    var headT = s.headT||0.30, tailT = s.tailT||0.70;
+    var noseTop = s.noseTop||0.15, noseBot = s.noseBot||0.35, ped = s.ped||0.18, arch = s.backArch||0.03;
+    var top, bot;
+    if (t < headT){                         // 头部：前缘斜切，吻偏下，额头/腹缘向后撑开
+      var k = t/headT;
+      top = noseTop + (1-noseTop)*k;
+      bot = noseBot + (1-noseBot)*k;
+    } else if (t < tailT){                  // 躯干：背线/腹线走平（背略拱）
+      var k2 = (t-headT)/(tailT-headT);
+      top = 1.0 + arch*k2;
+      bot = 1.0;
+    } else {                                // 尾部：背腹同时向尾柄收口
+      var k3 = (t-tailT)/Math.max(0.01,(1-tailT));
+      var topPeak = 1.0 + arch;
+      top = topPeak + (ped-topPeak)*k3;
+      bot = 1.0 + (ped-1.0)*k3;
+    }
+    return { top: top, bot: bot };
+  }
+
+  function buildFish(spec){
+    var s = SILHOUETTES[spec.silhouette] || SILHOUETTES.spindle;
+    var pal = palette(spec.color || '#8aa06a', spec.accent);
+    var grid = [], r, c;
+    for (r=0;r<G;r++){ grid[r]=[]; for(c=0;c<G;c++) grid[r][c]=null; }
+
+    var bx = 2, bodyLen = 22;              // 身体占据 x:2..24，尾部留给尾鳍
+    var cy = 16;                            // 中线
+    var maxH = (G/2) * s.h * (spec.bodyRatio || 1);
+    var x, t, hh, top, bot;
+    // 1) 躯干（含头）+ 三层明暗
+    for (x = bx; x <= bx+bodyLen; x++){
+      t = (x - bx) / bodyLen;
+      hh = Math.round(halfProfile(t, s) * (G/2) * (spec.bodyRatio || 1));
+      hh = Math.max(1, Math.min(15, hh));
+      if (cy - hh < 1) hh = cy - 1;   // 顶部留一行给背鳍
+      var drop = Math.round(bellyDrop(t, s, hh));
+      if (s.breamShape){
+        var H = Math.max(3, Math.round((G/2) * s.h * (spec.bodyRatio || 1)));
+        var off = breamOffsets(t, s);
+        top = Math.round(cy - off.top * H); // 背线：额头斜升→走平→尾柄收口
+        bot = Math.round(cy + off.bot * H); // 腹线：前端低→走平→尾柄上收
+        if (top < 1) top = 1;
+      } else {
+        top = cy - hh + Math.min(0, drop); // 头部抬高时背线一并略抬（前倾）
+        bot = cy + hh + drop;              // 腹部：平直到后段向上收
+        if (drop < 0 && t < s.peak) top = cy - hh + drop;
+      }
+      for (r = top; r <= bot; r++){
+        if (r<0||r>=G) continue;
+        var rel = (r - cy) / hh;            // -1..1
+        var key = 'main';
+        if (rel < -0.45) key = 'dark';       // 背深
+        else if (rel > 0.55) key = 'belly';  // 腹亮
+        else if (rel < -0.1) key = 'light';  // 侧上高光
+        grid[r][x] = key;
+      }
+      // 鳃盖线（头身分界，约 t=0.22）
+      if (Math.abs(t - 0.22) < 0.03 && spec.gill !== false){
+        grid[top][x] = 'dark'; grid[bot][x] = 'dark';
+      }
+    }
+    // 2) 头型微调
+    applyNose(grid, s.nose, bx, cy, maxH, spec, pal);
+    // 3) 嘴/颌
+    if (spec.mouth === 'barb')   barb(grid, bx, cy, pal);
+    if (spec.mouth === 'spear')  spear(grid, bx, cy, pal);
+    // 4) 花纹
+    if (spec.pattern && spec.pattern !== 'plain') applyPattern(grid, spec.pattern, bx, bodyLen, cy, pal);
+    // 5) 鳍（按分工，仅凸显选中的）
+    if (spec.fins) {
+      var dorsalKind = spec.fins.dorsal || spec.finDorsal;
+      if (dorsalKind && dorsalKind !== "none") dorsalFin(grid, s, bodyLen, bx, cy, dorsalKind, pal);
+      if (spec.fins.anal)   analFin(grid, s, bodyLen, bx, cy, spec.fins.anal);
+      if (spec.fins.pectoral) pecFin(grid, bx, cy, pal);
+      if (spec.fins.pelvic) pelFin(grid, bx, cy, pal);
+    }
+    // 6) 尾鳍
+    tailFin(grid, bx+bodyLen, cy, spec.finTail || spec.tail || 'fork', pal, s);
+    // 7) 眼
+    eye(grid, bx+3, cy-2, spec.eye, pal);
+
+    // 收集像素
+    var pixels = [];
+    for (r=0;r<G;r++) for(c=0;c<G;c++) if (grid[r][c]) pixels.push({x:c,y:r,key:grid[r][c]});
+    return { grid: grid, pixels: pixels, palette: pal };
+  }
+
+  function applyNose(grid, nose, bx, cy, maxH, spec, pal){
+    if (SILHOUETTES[spec.silhouette] && SILHOUETTES[spec.silhouette].noBaseCol) return; // 鲷形：前缘由几何决定，不补基列
+    if (nose === 'point'){ grid[cy-1][bx-1]='main'; grid[cy][bx-1]='main'; grid[cy+1][bx-1]='main'; }
+    else if (nose === 'blunt'){ grid[cy-2][bx-1]='dark'; grid[cy-1][bx-1]='main'; grid[cy][bx-1]='main'; grid[cy+1][bx-1]='main'; grid[cy+2][bx-1]='dark'; }
+    else { grid[cy-1][bx-1]='main'; grid[cy][bx-1]='main'; grid[cy+1][bx-1]='main'; }
+  }
+  function barb(grid, bx, cy, pal){
+    grid[cy+3][bx-1]='accent'; grid[cy+4][bx-2]='accent'; grid[cy+2][bx-2]='accent';
+  }
+  function spear(grid, bx, cy, pal){
+    for (var k=1;k<=5;k++){ grid[cy-1][bx-k]='light'; grid[cy][bx-k]='main'; }
+    grid[cy-1][bx-5]='accent';
+  }
+  function applyPattern(grid, pat, bx, bodyLen, cy, pal){
+    var x,r;
+    if (pat === 'stripe'){ for (x=bx+4;x<=bx+bodyLen;x+=3) for(r=0;r<32;r++) if(grid[r][x]&&grid[r][x]!=='eye') grid[r][x]='accent'; }
+    else if (pat === 'spot'){ for (x=bx+5;x<=bx+bodyLen;x+=4){ var yy=cy+(x%8<4?-3:3); if(grid[yy]&&grid[yy][x]&&grid[yy][x]!=='eye') grid[yy][x]='accent'; } }
+    else if (pat === 'mottle'){ for (x=bx+3;x<=bx+bodyLen;x+=2) for(r=cy-4;r<=cy+4;r+=3) if(grid[r]&&grid[r][x]&&(x*r)%5===0) grid[r][x]='accent'; }
+    else if (pat === 'gradient'){ for (x=bx;x<=bx+bodyLen;x++) for(r=cy-6;r<cy;r++) if(grid[r]&&grid[r][x]) grid[r][x]='dark'; }
+    else if (pat === 'lateral'){ for (x=bx+2;x<=bx+bodyLen;x++) if(grid[cy+1]&&grid[cy+1][x]&&grid[cy+1][x]!=='eye') grid[cy+1][x]='accent'; }
+  }
+  function setP(grid,x,y,k,force){ if(x>=0&&x<32&&y>=0&&y<32&&(force||!grid[y][x])) grid[y][x]=k; }
+  function topOf(grid,x,cy){ for(var r=cy-1;r>=0;r--){ if(!grid[r][x]) return r+1; } return 0; }
+  function botOf(grid,x,cy){ for(var r=cy+1;r<32;r++){ if(!grid[r][x]) return r-1; } return 31; }
+
+  function dorsalFin(grid, s, bodyLen, bx, cy, kind, pal){
+    var fc = 'fin';
+    // 背鳍起点统一放在背部最高点(peak)之后
+    var pkFrac = (SILHOUETTES[s.silhouette] ? SILHOUETTES[s.silhouette].peak : 0.34);
+    if (kind==='soft'){                       // 软条短：峰值后一段，最前端鳍条沿鱼身方向向斜后上方排列
+      var x0=bx+Math.round(bodyLen*Math.max(0.42,pkFrac+0.08)), x1=bx+Math.round(bodyLen*0.62);
+      for (var x=x0;x<=x1;x++){ var tp=topOf(grid,x,cy); if(tp>cy) continue;
+        // 前缘斜度：越靠前的鳍条越往后方退一格，形成“/”形前缘
+        var leadF = (x - x0) / Math.max(1, (x1 - x0));
+        // 前 2/5 段：每升高一层就往后再退一格 → 真正顺着鱼身向斜后上方
+        var off = (leadF < 0.4) ? (leadF < 0.2 ? 2 : 1) : 0;
+        setP(grid,x-off,tp-1,fc); setP(grid,x-off,tp-2,fc, tp-2>=0); }
+    } else if (kind==='long'){                // 软条长：峰值后沿背部连续，前缘同样斜后上方
+      var x0=bx+Math.round(bodyLen*Math.max(0.38,pkFrac+0.05)), x1=bx+Math.round(bodyLen*0.78);
+      var span=x1-x0||1;
+      for (var x=x0;x<=x1;x++){ var tp=topOf(grid,x,cy); if(tp>cy) continue;
+        var frac=(x-x0)/span; var hh=(frac<0.5)?2:1;
+        var off2 = (frac < 0.14) ? 2 : (frac < 0.42 ? 1 : 0); // 前缘逐层后退 → 斜后上方
+        for(var k=1;k<=hh;k++) setP(grid,x-off2,tp-k,fc); }
+    } else if (kind==='spine'){               // 硬刺：2~3px高，顶端带锯齿缺口
+      var x0=bx+Math.round(bodyLen*Math.max(0.40,pkFrac+0.06)), x1=bx+Math.round(bodyLen*0.62)+2; // 硬刺向后+2px(一个单元)
+      for (var x=x0;x<=x1;x++){ var tp=topOf(grid,x,cy); if(tp>cy) continue;
+        setP(grid,x,tp-1,fc); setP(grid,x,tp-2,fc, tp-2>=0); if((x%2)===0) setP(grid,x,tp-3,'accent'); }
+    } else if (kind==='sail'){                // 帆状：前段高耸，后段渐低（旗鱼帆）
+      var x0=bx+Math.round(bodyLen*Math.max(0.24,pkFrac)), x1=bx+Math.round(bodyLen*0.68);
+      var span=x1-x0||1;
+      for (var x=x0;x<=x1;x++){ var tp=topOf(grid,x,cy); if(tp>cy) continue;
+        var frac=(x-x0)/span; var hh = (frac<0.4)? 4 : (frac<0.7? 3 : 2);
+        for(var k=1;k<=hh;k++) setP(grid,x,tp-k, (k===hh?'accent':fc), k===hh); }
+    } else if (kind==='falcate'){             // 镰刀(鲳)：鳍底钉在背部最高点，尖端朝后上方(尾侧)，前缘长缓、后缘短陡
+      var sx0=bx+Math.round(bodyLen*0.15), sx1=bx+Math.round(bodyLen*0.55);
+      var pkx=sx0, minTop=32;
+      for (var x=sx0;x<=sx1;x++){ var tp=topOf(grid,x,cy); if(tp<minTop){ minTop=tp; pkx=x; } }
+      if (minTop < cy){
+        var L = 3;                               // 鳍叶高度固定3px(与臀鳍统一)
+        var baseTop = minTop;                    // 鳍底 = 背部真正最高点
+        var tipY = baseTop - L;
+        var tipX = pkx + 3;                      // 尖端在后方(尾侧)且居上(外伸收短)
+        var backBaseX = pkx + 1;                 // 后缘根部(略靠后)→ 短后缘
+        for (var yy=tipY; yy<=baseTop; yy++){
+          var t = (yy-tipY)/(L||1);              // 0尖端 → 1根部
+          // 前缘：尖端 → 前根(峰值)，长而缓的斜线
+          var xf = Math.round(tipX - t*(tipX - pkx));
+          // 后缘：尖端 → 后根，短而陡
+          var xb = Math.round(tipX - Math.pow(t,0.7)*(tipX - backBaseX));
+          for (var xx=xf; xx<=xb; xx++) setP(grid, xx, yy, (yy===tipY || xx===xf) ? 'accent' : fc, true);
+        }
+      }
+    }
+  }
+  function analFin(grid, s, bodyLen, bx, cy, kind){
+    var fc='fin';
+    if (kind==='falcate'){                    // 鲳：背鳍的上下镜像——鳍底钉在腹部真正最低点，尖端朝后下方，前缘长缓、后缘短陡
+      var sx0=bx+Math.round(bodyLen*0.15), sx1=bx+Math.round(bodyLen*0.55);
+      var ax=sx0, maxBot=-1;
+      for (var x=sx0;x<=sx1;x++){ var bb=botOf(grid,x,cy); if(bb>maxBot){ maxBot=bb; ax=x; } }
+      if (maxBot > cy){
+        var L = 3;                               // 鳍叶高度固定3px(与背鳍统一)
+        var baseBot = maxBot;                    // 鳍底 = 腹部真正最低点
+        var tipY = baseBot + L;
+        var tipX = ax + 3;                       // 尖端在后方(尾侧)且居下(外伸收短)
+        var backBaseX = ax + 1;                  // 后缘根部(略靠后)→ 短后缘
+        for (var yy=baseBot; yy<=tipY; yy++){
+          var t = (yy-baseBot)/(L||1);           // 0根部(贴腹) → 1尖端
+          // 前缘：从根部(ax)长而缓地扫到尖端(tipX)
+          var xf = Math.round(ax + (tipX-ax)*Math.pow(t,0.9));
+          // 后缘：从后根(backBaseX)短而陡地到尖端
+          var xb = Math.round(backBaseX + (tipX-backBaseX)*Math.pow(t,0.6));
+          var lo=Math.min(xf,xb), hi=Math.max(xf,xb);
+          for (var xx=lo; xx<=hi; xx++) setP(grid, xx, yy, (yy===tipY)?'accent':fc, true);
+        }
+      }
+    } else {
+      var x0=bx+Math.round(bodyLen*0.58), x1=bx+Math.round(bodyLen*0.80);
+      for (var x=x0;x<=x1;x++){ var bb=botOf(grid,x,cy); setP(grid,x,bb+1,fc); }
+    }
+  }
+  function pecFin(grid, bx, cy, pal){
+    var x=bx+6;
+    setP(grid,x,cy+3,'fin'); setP(grid,x-1,cy+4,'fin'); setP(grid,x,cy+4,'fin');
+  }
+  function pelFin(grid, bx, cy, pal){
+    var x=bx+10;
+    setP(grid,x,cy+4,'fin'); setP(grid,x,cy+5,'fin');
+  }
+  function tailFin(grid, tx, cy, kind, pal, s){
+    var b=tx+1, fc='fin';
+    if (s && s.tailLift) cy -= s.tailLift;   // 鲷形：尾鳍整体上移若干px
+    if (kind==='round'){                      // 圆尾：扇形，边缘圆润，无缺口
+      for(var dy=-2;dy<=2;dy++) setP(grid,b,cy+dy,'main');
+      for(var dy=-2;dy<=2;dy++) setP(grid,b+1,cy+dy,(Math.abs(dy)===2?'light':'main'));
+      setP(grid,b+2,cy-1,'light'); setP(grid,b+2,cy,'light'); setP(grid,b+2,cy+1,'light');
+    } else if (kind==='fork'){                // 叉尾：上下两叶(各2px)，中央缺口明显
+      for(var dy=-2;dy<=2;dy++) setP(grid,b,cy+dy,'main');
+      for(var dy=-3;dy<=3;dy++){ if(dy!==0) setP(grid,b+1,cy+dy,'main'); }
+      // 上叶
+      setP(grid,b+2,cy-3,fc); setP(grid,b+2,cy-2,'main');
+      // 下叶
+      setP(grid,b+2,cy+3,fc); setP(grid,b+2,cy+2,'main');
+      setP(grid,b+3,cy-3,'accent'); setP(grid,b+3,cy+3,'accent');
+      // 中央缺口保持空白 (cy-1,cy,cy+1 @ b+2/b+3)
+    } else if (kind==='lunate'){              // 月牙尾：窄而高，缺口比叉尾更深更尖
+      for(var dy=-2;dy<=2;dy++) setP(grid,b,cy+dy,'main');
+      setP(grid,b+1,cy-3,'main'); setP(grid,b+1,cy+3,'main');
+      setP(grid,b+2,cy-4,'accent'); setP(grid,b+2,cy-3,'main');
+      setP(grid,b+2,cy+4,'accent'); setP(grid,b+2,cy+3,'main');
+      setP(grid,b+3,cy-4,'accent'); setP(grid,b+3,cy+4,'accent');
+      // 中央缺口(cy-2..cy+2 @ b+2)全空 -> 更深的月牙
+    } else if (kind==='trap'){                // 梯形尾：由叉尾改造，后端平切、中段仅外凸1px
+      for(var dy=-2;dy<=2;dy++) setP(grid,b,cy+dy,'main');
+      for(var dy=-3;dy<=3;dy++) setP(grid,b+1,cy+dy,'main');   // base段外扩1px(比叉尾满)
+      // 中段外凸1px，后端平切(不再中央缺口)
+      for(var dy=-3;dy<=3;dy++) setP(grid,b+2,cy+dy,(Math.abs(dy)===3?fc:'main'));
+      setP(grid,b+2,cy-3,fc); setP(grid,b+2,cy+3,fc);
+      setP(grid,b+3,cy-2,'accent'); setP(grid,b+3,cy-1,'light'); setP(grid,b+3,cy,'light'); setP(grid,b+3,cy+1,'light'); setP(grid,b+3,cy+2,'accent'); // 平切收口
+    } else if (kind==='whip'){                // 鞭尾：细长延伸
+      setP(grid,b,cy,'main'); setP(grid,b+1,cy,'main');
+      setP(grid,b+2,cy,'main'); setP(grid,b+3,cy-1,'accent');
+    }
+  }
+  function eye(grid, x, y, style, pal){
+    // side: 1px小瞳(贴头侧) / top: 上位眼略靠上 / big: 大眼(2x2白眼球+瞳+高光)
+    if (style==='top'){ y = y-1; }              // 上位眼：更靠头顶
+    if (style==='big'){
+      setP(grid,x,  y,'white',true); setP(grid,x+1,y,  'white',true);
+      setP(grid,x, y+1,'white',true); setP(grid,x+1,y+1,'white',true);
+      setP(grid,x+1,y+1,'eye',true);             // 瞳孔
+      setP(grid,x,  y,'eye',true);               // 上缘压暗成虹膜感
+      setP(grid,x+1, y-1,'dark',true);
+    } else {
+      setP(grid,x,y,'white',true);               // 眼白 1px
+      setP(grid,x,y+1,'eye',true);               // 瞳孔 1px
+      setP(grid,x,y-1,'dark',true);              // 上眼线
+      if (style==='top') setP(grid,x+1,y-1,'dark',true);
+    }
+  }
+
+  return { G:G, buildFish:buildFish, palette:palette, SILHOUETTES:SILHOUETTES };
+});
+/* ---- 47 条鱼立绘配置（45 条用户调好的 + 锦鲤/虹鳟/鳐鱼） ---- */
+var ART_PRESETS = {
+    "野生鲫鱼":{"silhouette": "deep", "color": "#9aa583", "accent": "#6f7a5a", "pattern": "mottle", "finDorsal": "long", "finTail": "fork", "mouth": "normal", "eye": "side", "bodyRatio": 1, "extras": ["anal"], "fins": {"anal": "plain"}, "_src": "user"},
+    "草鱼":{"silhouette": "elongate", "color": "#5f7a45", "accent": "#3f5530", "pattern": "gradient", "finDorsal": "soft", "finTail": "fork", "mouth": "normal", "eye": "side", "bodyRatio": 0.85, "extras": ["pectoral"], "fins": {"pectoral": 1}, "_src": "user"},
+    "黄颡鱼":{"silhouette": "elongate", "color": "#c9a24b", "accent": "#8a6f2e", "pattern": "plain", "finDorsal": "soft", "finTail": "fork", "mouth": "barb", "eye": "top", "bodyRatio": 0.9, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "鲶鱼":{"silhouette": "elongate", "color": "#5a5348", "accent": "#3a342c", "pattern": "mottle", "finDorsal": "soft", "finTail": "fork", "mouth": "barb", "eye": "top", "bodyRatio": 0.85, "extras": ["pectoral"], "fins": {"pectoral": 1}, "_src": "user"},
+    "黑鱼":{"silhouette": "elongate", "color": "#0d1504", "accent": "#5c6454", "pattern": "mottle", "finDorsal": "none", "finTail": "round", "mouth": "normal", "eye": "side", "bodyRatio": 0.85, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "泥鳅":{"silhouette": "eel", "color": "#a19968", "accent": "#c3b413", "pattern": "plain", "finDorsal": "soft", "finTail": "round", "mouth": "barb", "eye": "side", "bodyRatio": 0.9, "extras": [], "fins": {}, "_src": "user"},
+    "翘嘴鲌":{"silhouette": "elongate", "color": "#bfc4ca", "accent": "#666c74", "pattern": "plain", "finDorsal": "soft", "finTail": "fork", "mouth": "spear", "eye": "big", "bodyRatio": 0.85, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "虹鳟":{"silhouette": "spindle", "color": "#d7cc84", "accent": "#a56940", "pattern": "spot", "finDorsal": "long", "finTail": "fork", "mouth": "normal", "eye": "side", "bodyRatio": 0.9, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "new"},
+    "锦鲤":{"silhouette": "deep", "color": "#ff4000", "accent": "#f9d853", "pattern": "spot", "finDorsal": "soft", "finTail": "fork", "mouth": "barb", "eye": "side", "bodyRatio": 1, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "new"},
+    "麦穗鱼":{"silhouette": "spindle", "color": "#a7b08c", "accent": "#6f7a55", "pattern": "plain", "finDorsal": "soft", "finTail": "fork", "mouth": "normal", "eye": "side", "bodyRatio": 0.7, "extras": [], "fins": {}, "_src": "user"},
+    "普通鲤鱼":{"silhouette": "deep", "color": "#c8865b", "accent": "#7a431f", "pattern": "plain", "finDorsal": "long", "finTail": "fork", "mouth": "barb", "eye": "side", "bodyRatio": 1, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "罗非鱼":{"silhouette": "bream", "color": "#5c6270", "accent": "#493636", "pattern": "mottle", "finDorsal": "long", "finTail": "trap", "mouth": "normal", "eye": "side", "bodyRatio": 1, "extras": ["pectoral", "anal", "pelvic"], "fins": {"pectoral": 1, "anal": "plain", "pelvic": 1}, "_src": "user"},
+    "鳑鲏":{"silhouette": "pomfret", "color": "#876e6e", "accent": "#7a3a3a", "pattern": "spot", "finDorsal": "long", "finTail": "fork", "mouth": "normal", "eye": "big", "bodyRatio": 0.85, "extras": ["anal"], "fins": {"anal": "plain"}, "_src": "user"},
+    "马口鱼":{"silhouette": "elongate", "color": "#899f8c", "accent": "#3d557b", "pattern": "stripe", "finDorsal": "soft", "finTail": "fork", "mouth": "normal", "eye": "side", "bodyRatio": 0.85, "extras": ["pectoral"], "fins": {"pectoral": 1}, "_src": "user"},
+    "溪石斑":{"silhouette": "elongate", "color": "#888f70", "accent": "#2a344b", "pattern": "stripe", "finDorsal": "long", "finTail": "fork", "mouth": "normal", "eye": "side", "bodyRatio": 1, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "冷水狗鱼":{"silhouette": "elongate", "color": "#a6ac91", "accent": "#6c504b", "pattern": "mottle", "finDorsal": "soft", "finTail": "fork", "mouth": "spear", "eye": "side", "bodyRatio": 0.8, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "香鱼":{"silhouette": "elongate", "color": "#a5a88f", "accent": "#8c8926", "pattern": "plain", "finDorsal": "long", "finTail": "fork", "mouth": "normal", "eye": "side", "bodyRatio": 0.85, "extras": ["pectoral"], "fins": {"pectoral": 1}, "_src": "user"},
+    "花鳗鲡":{"silhouette": "eel", "color": "#716f23", "accent": "#51512a", "pattern": "mottle", "finDorsal": "soft", "finTail": "round", "mouth": "normal", "eye": "side", "bodyRatio": 1, "extras": [], "fins": {}, "_src": "user"},
+    "鱤鱼":{"silhouette": "elongate", "color": "#b4c3cf", "accent": "#352b27", "pattern": "plain", "finDorsal": "soft", "finTail": "fork", "mouth": "spear", "eye": "side", "bodyRatio": 0.8, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "野生青鱼":{"silhouette": "elongate", "color": "#4a5560", "accent": "#2e3740", "pattern": "gradient", "finDorsal": "soft", "finTail": "fork", "mouth": "normal", "eye": "side", "bodyRatio": 0.9, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "哲罗鲑":{"silhouette": "elongate", "color": "#beaa97", "accent": "#5a4130", "pattern": "mottle", "finDorsal": "soft", "finTail": "fork", "mouth": "normal", "eye": "big", "bodyRatio": 0.9, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "大马哈鱼":{"silhouette": "elongate", "color": "#961d1d", "accent": "#13450d", "pattern": "spot", "finDorsal": "soft", "finTail": "fork", "mouth": "normal", "eye": "side", "bodyRatio": 0.9, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "江鳕":{"silhouette": "eel", "color": "#7a6929", "accent": "#343a2e", "pattern": "stripe", "finDorsal": "long", "finTail": "round", "mouth": "barb", "eye": "side", "bodyRatio": 0.95, "extras": ["anal"], "fins": {"anal": "plain"}, "_src": "user"},
+    "沙丁鱼":{"silhouette": "elongate", "color": "#b9b7a2", "accent": "#736e59", "pattern": "plain", "finDorsal": "soft", "finTail": "fork", "mouth": "normal", "eye": "side", "bodyRatio": 0.9, "extras": [], "fins": {}, "_src": "user"},
+    "凤尾鱼":{"silhouette": "spindle", "color": "#b0b09b", "accent": "#948f10", "pattern": "lateral", "finDorsal": "soft", "finTail": "fork", "mouth": "normal", "eye": "big", "bodyRatio": 0.7, "extras": [], "fins": {}, "_src": "user"},
+    "黑鲷":{"silhouette": "bream", "color": "#4a4a2c", "accent": "#000000", "pattern": "plain", "finDorsal": "spine", "mouth": "normal", "eye": "side", "bodyRatio": 1, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "真鲷":{"silhouette": "bream", "color": "#c85a5a", "accent": "#8a3030", "pattern": "plain", "finDorsal": "spine", "mouth": "normal", "eye": "big", "bodyRatio": 1, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "鲭鱼":{"silhouette": "elongate", "color": "#5f90a1", "accent": "#22404a", "pattern": "stripe", "mouth": "normal", "eye": "side", "bodyRatio": 0.85, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "海鲈鱼":{"silhouette": "deep", "color": "#8a9e9e", "accent": "#2b332d", "pattern": "mottle", "finDorsal": "spine", "mouth": "normal", "eye": "side", "bodyRatio": 0.9, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "鲻鱼":{"silhouette": "elongate", "color": "#b0bbc2", "accent": "#3c4145", "pattern": "plain", "finDorsal": "none", "mouth": "normal", "eye": "side", "bodyRatio": 0.9, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "银鲳鱼":{"silhouette": "pomfret", "color": "#bdcedb", "accent": "#6b6b5d", "pattern": "plain", "finDorsal": "falcate", "mouth": "normal", "eye": "big", "bodyRatio": 1, "extras": ["pectoral", "analFalc"], "fins": {"pectoral": 1, "anal": "falcate"}, "_src": "user"},
+    "秋刀鱼":{"silhouette": "elongate", "color": "#9797c4", "accent": "#000012", "pattern": "gradient", "finDorsal": "long", "mouth": "spear", "eye": "big", "bodyRatio": 0.7, "extras": [], "fins": {}, "_src": "user"},
+    "六线鱼":{"silhouette": "elongate", "color": "#b08702", "accent": "#823f00", "pattern": "stripe", "finDorsal": "long", "finTail": "trap", "mouth": "normal", "eye": "side", "bodyRatio": 0.9, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "海鳗":{"silhouette": "eel", "color": "#72818f", "accent": "#343c44", "pattern": "mottle", "finTail": "round", "mouth": "spear", "eye": "side", "bodyRatio": 1, "extras": [], "fins": {}, "_src": "user"},
+    "马鲛鱼":{"silhouette": "elongate", "color": "#9bb0ba", "accent": "#1e3a48", "pattern": "mottle", "finDorsal": "none", "finTail": "lunate", "mouth": "normal", "eye": "side", "bodyRatio": 0.85, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "深海比目鱼":{"silhouette": "flat", "color": "#7a6a4a", "accent": "#4f4530", "pattern": "mottle", "finDorsal": "long", "finTail": "round", "mouth": "normal", "eye": "top", "bodyRatio": 1, "extras": ["anal"], "fins": {"anal": "plain"}, "_src": "user"},
+    "龙胆石斑鱼":{"silhouette": "bream", "color": "#2e2b1e", "accent": "#948c6f", "pattern": "stripe", "finDorsal": "spine", "finTail": "trap", "mouth": "normal", "eye": "side", "bodyRatio": 1.05, "extras": ["anal", "pectoral", "pelvic"], "fins": {"pectoral": 1, "anal": "plain", "pelvic": 1}, "_src": "user"},
+    "东星斑":{"silhouette": "bream", "color": "#cc3d21", "accent": "#2d2d5e", "pattern": "spot", "finDorsal": "long", "finTail": "trap", "mouth": "normal", "eye": "big", "bodyRatio": 1, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "大黄鱼":{"silhouette": "spindle", "color": "#d8b24a", "accent": "#a07a28", "pattern": "plain", "finDorsal": "long", "finTail": "trap", "mouth": "normal", "eye": "side", "bodyRatio": 0.9, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "小型金枪鱼":{"silhouette": "spindle", "color": "#475d73", "accent": "#102233", "pattern": "gradient", "finDorsal": "falcate", "finTail": "lunate", "mouth": "normal", "eye": "side", "bodyRatio": 0.85, "extras": ["pectoral", "analFalc"], "fins": {"pectoral": 1, "anal": "falcate"}, "_src": "user"},
+    "大西洋鳕鱼":{"silhouette": "spindle", "color": "#9e946a", "accent": "#565240", "pattern": "mottle", "finDorsal": "long", "finTail": "trap", "mouth": "barb", "eye": "side", "bodyRatio": 0.9, "extras": ["pectoral", "anal"], "fins": {"pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "旗鱼":{"silhouette": "spindle", "color": "#2f5a9c", "accent": "#1d3a66", "pattern": "lateral", "finDorsal": "sail", "finTail": "lunate", "mouth": "spear", "eye": "side", "bodyRatio": 0.8, "extras": ["pectoral", "analFalc"], "fins": {"pectoral": 1, "anal": "falcate"}, "_src": "user"},
+    "蓝鳍金枪鱼":{"silhouette": "spindle", "color": "#2a4a7a", "accent": "#14305a", "pattern": "mottle", "finDorsal": "falcate", "finTail": "lunate", "mouth": "normal", "eye": "side", "bodyRatio": 0.85, "extras": ["pectoral", "pelvic"], "fins": {"pectoral": 1, "pelvic": 1}, "_src": "user"},
+    "盲鳗":{"silhouette": "eel", "color": "#b5a89a", "accent": "#6a5f52", "pattern": "plain", "finTail": "whip", "mouth": "barb", "eye": "side", "bodyRatio": 0.85, "extras": [], "fins": {}, "_src": "user"},
+    "河鲀":{"silhouette": "globular", "color": "#caa24a", "accent": "#8a6f2e", "pattern": "mottle", "finDorsal": "none", "finTail": "round", "mouth": "normal", "eye": "big", "bodyRatio": 1.1, "extras": ["anal"], "fins": {"anal": "plain"}, "_src": "user"},
+    "淡水鲈鱼":{"silhouette": "deep", "color": "#7a7a6a", "accent": "#2b3b2c", "pattern": "mottle", "finDorsal": "long", "finTail": "fork", "mouth": "normal", "eye": "side", "bodyRatio": 0.9, "extras": ["pectoral", "anal"], "fins": {"dorsal": "long", "pectoral": 1, "anal": "plain"}, "_src": "user"},
+    "鳐鱼":{"silhouette": "flat", "color": "#6a6a5a", "accent": "#3f3f34", "pattern": "spot", "finDorsal": "none", "finTail": "whip", "mouth": "normal", "eye": "top", "bodyRatio": 1.1, "extras": ["pectoral"], "fins": {"pectoral": 1}, "_src": "new"}
+};
+var FISH_ART = (function(){
+  var cache = {};
+  var ALIAS = { "鲭鱼(青花鱼)":"鲭鱼", "黑鱼(乌鳢)":"黑鱼", "鱤鱼(水老虎)":"鱤鱼", "马鲛鱼(鲅鱼)":"马鲛鱼", "黑鱼":"黑鱼" };
+  function get(name){
+    if (!name) return null;
+    if (cache[name]) return cache[name];
+    var spec = ART_PRESETS[name] || ART_PRESETS[ALIAS[name]] || null;
+    if (!spec) return null;
+    name = ART_PRESETS[name] ? name : ALIAS[name];
+    try {
+      var res = FishCore.buildFish(spec);
+      var pal = res.palette;
+      cache[name] = { grid: res.grid, cmap: { dark:pal.dark, main:pal.main, light:pal.light, belly:pal.belly, accent:pal.accent, fin:pal.fin, eye:pal.eye, white:pal.white } };
+    } catch(e){ return null; }
+    return cache[name];
+  }
+  /* 把 32x32 逻辑网格画进任意尺寸画布（像素风、关闭平滑、允许偏移） */
+  function paint(ctx, name, ox, oy, size){
+    var art = get(name);
+    if (!art || !ctx) return false;
+    var W = ctx.canvas.width, H = ctx.canvas.height;
+    var S = size || (W/32);
+    var G = FishCore.G;
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, W, H);
+    for (var r=0;r<G;r++) for (var c=0;c<G;c++){
+      var k = art.grid[r][c];
+      if (!k) continue;
+      ctx.fillStyle = art.cmap[k] || art.cmap.main;
+      ctx.fillRect(Math.round((ox||0) + c*S), Math.round((oy||0) + r*S), Math.ceil(S), Math.ceil(S));
+    }
+    return true;
+  }
+  /* 兼容旧调用：drawFishIcon(ctx, shape, color, name) */
+  function drawCompat(ctx, shape, color, name){
+    if (paint(ctx, name, 0, 0, ctx.canvas.width/32)) return;
+    if (typeof drawFishIconLegacy === 'function') drawFishIconLegacy(ctx, shape, color);
+  }
+  return { get:get, paint:paint, drawCompat:drawCompat, has:function(n){ return !!ART_PRESETS[n] || !!ART_PRESETS[ALIAS[n]]; } };
+})();
+</script>
+<script>
 window.onerror = function(msg, url, line) {
   alert("程序遇到错误，请刷新页面重试。\n错误信息: " + msg + "\n位置: 第 " + line + " 行");
   return false;
@@ -537,9 +986,11 @@ function openCodex() {
         cvs.width = 48; cvs.height = 48;
         cvs.style.cssText = "width:36px;height:36px;image-rendering:pixelated;background:#edf3ef;border:1px solid var(--line2);border-radius:3px;flex:0 0 auto;";
         const cctx = cvs.getContext('2d');
-        if (rec) drawFishIcon(cctx, f.shape, f.color);
+        if (rec) drawFishIcon(cctx, f.shape, f.color, f.name);
         else drawQuestionIcon(cctx);
         row.appendChild(cvs);
+        row.style.cursor = "pointer";
+        row.onclick = function () { if (typeof showFishDetail === 'function') showFishDetail(f.name, f.shape, f.color, !!rec); };
 
         const info = document.createElement('div');
         info.style.cssText = "flex:1 1 auto;min-width:0;";
@@ -824,7 +1275,7 @@ function drawPortrait(type) {
     pctx.fillRect(1.5*S, 17*S, S, S);
   }
 }
-function drawFishIcon(ctx, shape, color) {
+function drawFishIconLegacy(ctx, shape, color) {
   ctx.clearRect(0, 0, 48, 48); 
   ctx.imageSmoothingEnabled = false; 
   const S = 3; 
@@ -1023,11 +1474,13 @@ const FISH_DB = {
     { name: "小龙虾(水产)", min: 5, max: 15, price: 1.5, color: "#c0392b", shape: "lobster", rarity: "common", tags: ["seafood"], seasons: ["summer"] },
     { name: "河蚌(水产)", min: 3, max: 10, price: 2.0, color: "#ecf0f1", shape: "shell", rarity: "common", tags: ["seafood"], seasons: [] },
     { name: "普通鲤鱼", min: 25, max: 75, price: 2.0, color: "#e09070", shape: "normal", rarity: "uncommon", tags: [], seasons: [] },
+    { name: "锦鲤", min: 25, max: 80, price: 3.0, color: "#ff4000", shape: "normal", rarity: "rare", tags: ["precious"], seasons: [] },
     { name: "罗非鱼", min: 15, max: 35, price: 2.5, color: "#7d8a7d", shape: "normal", rarity: "uncommon", tags: [], seasons: [] },
     { name: "淡水鲈鱼", min: 25, max: 60, price: 3.0, color: "#80a070", shape: "normal", rarity: "uncommon", tags: ["predator"], seasons: [] },
     { name: "黄颡鱼", min: 10, max: 30, price: 3.0, color: "#c9a94f", shape: "normal", rarity: "uncommon", tags: ["predator"], seasons: ["spring"] },
     { name: "鳑鲏", min: 5, max: 12, price: 1.5, color: "#d4a0a0", shape: "round", rarity: "uncommon", tags: [], seasons: ["spring"] },
     { name: "马口鱼", min: 15, max: 35, price: 2.5, color: "#a8b8c0", shape: "slender", rarity: "uncommon", tags: ["predator"], seasons: ["spring"] },
+    { name: "虹鳟", min: 20, max: 50, price: 3.5, color: "#d7cc84", shape: "slender", rarity: "rare", tags: ["predator"], seasons: ["spring", "autumn"] },
     { name: "草鱼", min: 30, max: 95, price: 2.5, color: "#8a9a6a", shape: "normal", rarity: "rare", tags: [], seasons: [] },
     { name: "鲶鱼", min: 40, max: 90, price: 2.5, color: "#5a5a4a", shape: "eel", rarity: "rare", tags: ["predator"], seasons: [] },
     { name: "溪石斑", min: 10, max: 25, price: 4.0, color: "#7a8a6a", shape: "normal", rarity: "rare", tags: [], seasons: [] },
@@ -1060,8 +1513,11 @@ const FISH_DB = {
     { name: "海鳗", min: 40, max: 100, price: 3.5, color: "#5a6a7a", shape: "eel", rarity: "rare", tags: ["predator"], seasons: [] },
     { name: "马鲛鱼(鲅鱼)", min: 40, max: 85, price: 3.0, color: "#6a8a9a", shape: "slender", rarity: "rare", tags: ["predator"], seasons: ["summer"] },
     { name: "深海比目鱼", min: 20, max: 60, price: 4.0, color: "#8a7a6a", shape: "round", rarity: "rare", tags: [], seasons: ["winter"] },
+    { name: "鳐鱼", min: 30, max: 90, price: 4.0, color: "#6a6a5a", shape: "round", rarity: "epic", tags: ["predator", "night"], seasons: ["summer"] },
     { name: "普通章鱼(水产)", min: 30, max: 80, price: 4.0, color: "#c08080", shape: "octopus", rarity: "rare", tags: ["seafood", "predator"], seasons: ["autumn"] },
     { name: "海胆(水产)", min: 10, max: 20, price: 3.0, color: "#d35400", shape: "urchin", rarity: "rare", tags: ["seafood"], seasons: ["summer"] },
+    { name: "扇贝(水产)", min: 8, max: 15, price: 3.5, color: "#d8c8a8", shape: "shell", rarity: "uncommon", tags: ["seafood", "day"], seasons: [] },
+    { name: "牡蛎(水产)", min: 5, max: 12, price: 3.0, color: "#9aa0a0", shape: "shell", rarity: "common", tags: ["seafood"], seasons: [] },
     { name: "波士顿龙虾(水产)", min: 30, max: 60, price: 6.0, color: "#d35400", shape: "lobster", rarity: "rare", tags: ["seafood", "precious"], seasons: ["winter"] },
     { name: "龙胆石斑鱼", min: 90, max: 180, price: 4.5, color: "#6a7a6a", shape: "normal", rarity: "epic", tags: ["predator"], seasons: [] },
     { name: "东星斑", min: 30, max: 60, price: 6.0, color: "#e08060", shape: "normal", rarity: "epic", tags: ["predator"], seasons: [] },
@@ -2239,7 +2695,8 @@ function openBag() {
       let st = getFishStatus(f, 'bag');
       const d = document.createElement('div'); d.className = "bag-item";
       const cvs = document.createElement('canvas'); cvs.width = 48; cvs.height = 48;
-      drawFishIcon(cvs.getContext('2d'), f.shape, f.color);
+      drawFishIcon(cvs.getContext('2d'), f.shape, f.color, f.name);
+      if (FISH_ART.has(f.name)) cvs.style.objectFit = 'none';
       d.appendChild(cvs);
       const info = document.createElement('div'); info.className = "bag-info";
       let seasonTag = "";
@@ -2297,7 +2754,8 @@ function openBag() {
     state.dryFishBag.forEach((f, idx) => {
       const d = document.createElement('div'); d.className = "bag-item";
       const cvs = document.createElement('canvas'); cvs.width = 48; cvs.height = 48;
-      drawFishIcon(cvs.getContext('2d'), f.shape, f.color);
+      drawFishIcon(cvs.getContext('2d'), f.shape, f.color, f.name);
+      if (FISH_ART.has(f.name)) cvs.style.objectFit = 'none';
       d.appendChild(cvs);
       const info = document.createElement('div'); info.className = "bag-info";
       let price = calcMarketPrice(f);
@@ -2345,7 +2803,7 @@ function openColdBox() {
     let st = getFishStatus(f, 'cold');
     const d = document.createElement('div'); d.className = "bag-item";
     const cvs = document.createElement('canvas'); cvs.width = 48; cvs.height = 48;
-    drawFishIcon(cvs.getContext('2d'), f.shape, f.color);
+    drawFishIcon(cvs.getContext('2d'), f.shape, f.color, f.name);
     d.appendChild(cvs);
     const info = document.createElement('div'); info.className = "bag-info";
     info.innerHTML = `<b>${f.name}</b> <small>${f.size} cm (${getFishSlots(f.size)}格) · <span style="color:${st.color}">${st.label}</span><br><span style="color:var(--dim);">${getFishShelfLifeText(f, 'cold')}</span></small>`;
@@ -2376,7 +2834,7 @@ function openFrozenBox() {
     let st = getFishStatus(f, 'frozen');
     const d = document.createElement('div'); d.className = "bag-item";
     const cvs = document.createElement('canvas'); cvs.width = 48; cvs.height = 48;
-    drawFishIcon(cvs.getContext('2d'), f.shape, f.color);
+    drawFishIcon(cvs.getContext('2d'), f.shape, f.color, f.name);
     d.appendChild(cvs);
     const info = document.createElement('div'); info.className = "bag-info";
     info.innerHTML = `<b>${f.name}</b> <small>${f.size} cm (${getFishSlots(f.size)}格) · <span style="color:${st.color}">${st.label}</span></small>`;
@@ -2416,7 +2874,8 @@ function openDoctor() {
       }
       const d = document.createElement('div'); d.className = "bag-item";
       const cvs = document.createElement('canvas'); cvs.width = 48; cvs.height = 48;
-      drawFishIcon(cvs.getContext('2d'), f.shape, f.color);
+      drawFishIcon(cvs.getContext('2d'), f.shape, f.color, f.name);
+      if (FISH_ART.has(f.name)) cvs.style.objectFit = 'none';
       d.appendChild(cvs);
       const info = document.createElement('div'); info.className = "bag-info";
       info.innerHTML = `<b>${f.name}</b> <small>${f.size} cm · 估价 ${price} 元</small>`;
@@ -3934,6 +4393,223 @@ function toggleDifficulty() {
   addLog(`[系统] 难度已切换为：${state.difficulty === 'hard' ? '困难' : '普通'}模式`, "log-sys");
   toast(`已切换为${state.difficulty === 'hard' ? '困难' : '普通'}模式`);
   updateHUD(); updateControls();
+}
+/* 立绘桥接：传了鱼名走新立绘，否则走原版 */
+function drawFishIcon(ctx, shape, color, name) {
+  if (name && typeof AQUA_ART !== 'undefined' && AQUA_ART.paint(ctx, name)) return;
+  FISH_ART.drawCompat(ctx, shape, color, name);
+}
+
+/* ================= 水产立绘 + 图鉴介绍模块（增量，不动上方任何代码） =================
+ * 覆盖 11 条水产（蟹3/龙虾2/头足2/贝3/海胆1）的 32×32 立绘；
+ * 章月 / 灰色小章鱼 不在此列，仍走原版 drawFishIconLegacy。
+ * 列表绘制与图鉴点击大图共用同一套像素，保证一致。 */
+const AQUA_ART = (function () {
+  function mk() { const g = []; for (let y = 0; y < 32; y++) { g.push([]); for (let x = 0; x < 32; x++) g[y].push(null); } return g; }
+  function px(g, x, y, c) { x |= 0; y |= 0; if (x >= 0 && x < 32 && y >= 0 && y < 32 && c) g[y][x] = c; }
+  function ell(g, cx, cy, rx, ry, c) { for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) { const dx = (x - cx) / rx, dy = (y - cy) / ry; if (dx * dx + dy * dy <= 1) px(g, x, y, c); } }
+  function ring(g, cx, cy, rx, ry, c) { for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) { const dx = (x - cx) / rx, dy = (y - cy) / ry, d = dx * dx + dy * dy; if (d <= 1 && d >= 0.55) px(g, x, y, c); } }
+  function ln(g, x0, y0, x1, y1, c) { const N = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)); for (let i = 0; i <= N; i++) px(g, Math.round(x0 + (x1 - x0) * i / N), Math.round(y0 + (y1 - y0) * i / N), c); }
+  const C = {
+    crabA: '#5a6b5a', crabAdk: '#3d4a3d', crabB: '#a83a2a', crabBdk: '#7a2818', crabC: '#c25a2e', crabCdk: '#8a3a1e',
+    lobA: '#8a3a2a', lobAdk: '#5a2418', lobB: '#3f5a4a', lobBdk: '#28382e',
+    sq: '#d8c4c4', sqdk: '#a88a8a', oct: '#a85a4a', octdk: '#6f3a30',
+    mussel: '#3a3128', musseldk: '#241d16', musselacc: '#6b5335', hl: '#cbb79a',
+    urchin: '#3a2a4a', urchindk: '#251a30', scallop: '#d8c8a8', scallopdk: '#a89068', scallopacc: '#c99a5a',
+    oyster: '#9aa0a0', oysterdk: '#666b6b', eye: '#111', wht: '#fff'
+  };
+  const ART = {};
+  function drawCrab(shell, shellDk, leg, legDk, big, legLen, spike) {
+    return function (g) {
+      legLen = legLen || 9;
+      ell(g, 16, 13, 6, 4, shell); ell(g, 16, 12, 5, 3, shell);
+      ring(g, 16, 13, 6, 4, shellDk);
+      for (let s = -1; s <= 1; s += 2) {
+        const xs = s < 0 ? 11 : 21;
+        for (let i = 0; i < 3; i++) {
+          const y0 = 12 + i, ex = 16 + s * (legLen + i), ey = y0 + 2 + i;
+          ln(g, xs, y0, ex, ey, leg);
+          ln(g, ex, ey, ex + s * 2, ey + 2, legDk);
+          if (spike) px(g, ex + s, ey, legDk);
+        }
+        ln(g, 16 + s * 5, 11, 16 + s * 8, 9, leg);
+        ell(g, 16 + s * 9, 8, 2, 2, leg); ell(g, 16 + s * 9, 8, 1, 1, shell);
+      }
+      px(g, 13, 9, shellDk); px(g, 19, 9, shellDk); px(g, 13, 8, C.eye); px(g, 19, 8, C.eye);
+      if (big) { px(g, 14, 13, shellDk); px(g, 16, 14, shellDk); px(g, 18, 13, shellDk); }
+    };
+  }
+  function drawLob(body, bodyDk, claw, hasBigClaw) {
+    return function (g) {
+      ln(g, 14, 7, 9, 2, bodyDk); ln(g, 18, 7, 23, 2, bodyDk);
+      for (let i = 0; i < 6; i++) ell(g, 16, 9 + i * 2, 3 - i * 0.25, 1.4, body);
+      ring(g, 16, 12, 3, 6, bodyDk);
+      ell(g, 16, 23, 4, 2, body); px(g, 14, 22, bodyDk); px(g, 18, 22, bodyDk); px(g, 16, 21, bodyDk);
+      if (hasBigClaw) { for (let s = -1; s <= 1; s += 2) { ln(g, 16 + s * 3, 10, 16 + s * 8, 9, claw); ell(g, 16 + s * 10, 8, 2, 2.5, claw); ell(g, 16 + s * 10, 8, 1, 1.4, bodyDk); } }
+      else { for (let s = -1; s <= 1; s += 2) { ln(g, 16 + s * 3, 10, 16 + s * 6, 10, claw); ell(g, 16 + s * 7, 10, 1.4, 1.4, claw); } }
+      px(g, 14, 8, C.eye); px(g, 18, 8, C.eye);
+    };
+  }
+  ART['大闸蟹'] = drawCrab(C.crabA, C.crabAdk, C.crabA, C.crabAdk, true, 9, false);
+  ART['帝王蟹'] = drawCrab(C.crabB, C.crabBdk, C.crabB, C.crabBdk, true, 12, true);
+  ART['松叶蟹'] = drawCrab(C.crabC, C.crabCdk, C.crabC, C.crabCdk, false, 13, false);
+  ART['小龙虾'] = drawLob(C.lobA, C.lobAdk, C.lobA, false);
+  ART['波士顿龙虾'] = drawLob(C.lobB, C.lobBdk, C.lobB, true);
+  ART['鱿鱼'] = function (g) {
+    for (let i = 0; i < 10; i++) ell(g, 16, 7 + i, Math.round(1 + i * 0.7), 1, C.sq);
+    ring(g, 16, 11, 6, 4, C.sqdk);
+    ln(g, 13, 5, 11, 2, C.sqdk); ln(g, 19, 5, 21, 2, C.sqdk); ln(g, 11, 2, 16, 4, C.sq); ln(g, 21, 2, 16, 4, C.sq);
+    const ends = [11, 13, 15, 16, 17, 19, 21, 14, 18, 16];
+    for (let i = 0; i < 10; i++) ln(g, 16, 16, ends[i], 26, i % 2 ? C.sq : C.sqdk);
+    px(g, 14, 13, C.eye); px(g, 18, 13, C.eye);
+  };
+  ART['普通章鱼'] = function (g) {
+    ell(g, 16, 13, 6, 5, C.oct); ell(g, 16, 12, 5, 4, C.oct);
+    const starts = [12, 13.5, 15, 16.5, 18, 19.5, 15.5, 16.5], ends = [6, 10, 14, 16, 18, 22, 26, 24];
+    for (let i = 0; i < 8; i++) ln(g, starts[i], 16, ends[i], 26, C.octdk);
+    for (let i = 0; i < 8; i++) px(g, (starts[i] + ends[i]) / 2, 21, C.octdk);
+    px(g, 14, 12, C.wht); px(g, 18, 12, C.wht); px(g, 14, 12, C.eye); px(g, 18, 12, C.eye);
+  };
+  ART['河蚌'] = function (g) {
+    const dx = 8; // 整体右移，使壳居中于32画布
+    const rows = [[7, 8], [5, 10], [4, 11], [3, 12], [3, 12], [3, 13], [3, 13], [4, 13], [4, 12], [5, 11], [6, 10], [7, 9]], y0 = 10;
+    for (let i = 0; i < rows.length; i++) for (let x = rows[i][0]; x <= rows[i][1]; x++) px(g, x + dx, y0 + i, C.mussel);
+    for (let m = 1; m <= 3; m++) for (let i = 0; i < rows.length; i++) {
+      const ll = rows[i][0] + m, rr = rows[i][1] - m;
+      if (ll <= rr) { px(g, ll + dx, y0 + i, C.musselacc); px(g, rr + dx, y0 + i, C.musselacc); }
+      if (i === 0 || i === rows.length - 1) for (let x = ll; x <= rr; x++) px(g, x + dx, y0 + i, C.musselacc);
+    }
+    px(g, 8 + dx, 11, C.hl); px(g, 8 + dx, 12, C.hl);
+  };
+  ART['海胆'] = function (g) {
+    const cx = 16, cy = 16, rx = 6, ry = 5;
+    ell(g, cx, cy, rx, ry, C.urchin); ring(g, cx, cy, rx, ry, C.urchindk);
+    const sp = [[cx, cy - ry, cx, cy - ry - 4], [cx, cy + ry, cx, cy + ry + 4], [cx - rx, cy, cx - rx - 4, cy], [cx + rx, cy, cx + rx + 4, cy],
+      [cx - 4, cy - 3, cx - 7, cy - 6], [cx + 4, cy - 3, cx + 7, cy - 6], [cx - 4, cy + 3, cx - 7, cy + 6], [cx + 4, cy + 3, cx + 7, cy + 6],
+      [cx - 3, cy - 4, cx - 5, cy - 7], [cx + 3, cy - 4, cx + 5, cy - 7], [cx - 3, cy + 4, cx - 5, cy + 7], [cx + 3, cy + 4, cx + 5, cy + 7]];
+    for (let k = 0; k < sp.length; k++) ln(g, sp[k][0], sp[k][1], sp[k][2], sp[k][3], C.urchindk);
+    px(g, 14, 15, C.urchindk); px(g, 18, 16, C.urchindk); px(g, 16, 18, C.urchindk);
+  };
+  ART['扇贝'] = function (g) {
+    const cx = 16, top = 6, arc = [9, 7, 4, 2];
+    for (let y = top; y <= 20; y++) {
+      let hw = (y <= 16) ? (y - top) : arc[y - 17];
+      if (hw === undefined || hw < 0) continue;
+      for (let x = cx - hw; x <= cx + hw; x++) px(g, x, y, y >= 20 ? C.scallopdk : C.scallop);
+    }
+    for (let dx = -9; dx <= 9; dx += 3) ln(g, cx, 7, cx + dx, 19, C.scallopacc);
+    px(g, 9, 6, C.scallop); px(g, 8, 6, C.scallop); px(g, 10, 5, C.scallop); px(g, 9, 5, C.scallopdk);
+    px(g, 23, 6, C.scallop); px(g, 24, 6, C.scallop); px(g, 22, 5, C.scallop); px(g, 23, 5, C.scallopdk);
+    px(g, 16, 5, C.hl); px(g, 15, 6, C.hl); px(g, 17, 6, C.hl);
+  };
+  ART['牡蛎'] = function (g) {
+    const dx = 8; // 整体右移，使壳居中于32画布
+    const rows = [[8, 9], [6, 11], [5, 12], [4, 13], [4, 13], [5, 13], [5, 12], [6, 11], [7, 10]], y0 = 11;
+    for (let i = 0; i < rows.length; i++) {
+      for (let x = rows[i][0]; x <= rows[i][1]; x++) px(g, x + dx, y0 + i, i % 2 ? C.oyster : C.oysterdk);
+      px(g, rows[i][0] + dx, y0 + i, C.oysterdk); px(g, rows[i][1] + dx, y0 + i, C.oysterdk);
+    }
+    px(g, 10 + dx, 12, C.hl); px(g, 11 + dx, 12, C.hl);
+  };
+  function base(name) { return String(name || '').replace(/\(.*?\)/g, ''); }
+  function paint(ctx, name) {
+    const fn = ART[base(name)];
+    if (!fn) return false;
+    const g = mk(); fn(g);
+    const W = ctx.canvas.width || 32, H = ctx.canvas.height || 32;
+    const ox = Math.floor((W - 32) / 2), oy = Math.floor((H - 32) / 2);
+    ctx.clearRect(0, 0, W, H);
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) if (g[y][x]) { ctx.fillStyle = g[y][x]; ctx.fillRect(x + ox, y + oy, 1, 1); }
+    return true;
+  }
+  return { paint: paint, has: function (n) { return !!ART[base(n)]; } };
+})();
+
+/* 图鉴一句话介绍（动森风：事实 + 冷知识 + 大白话；章月 / 灰色小章鱼不写） */
+const FISH_INTRO = {
+  '野生鲫鱼': '河沟池塘里最常见的鱼，适应力强。颜色偏灰绿，刺多，熬汤最鲜。',
+  '草鱼': '四大家鱼之一，专吃水草，长得快。个头大，力气也大，遛起来费劲。',
+  '黄颡鱼': '夜里出来觅食，身上的刺扎人很疼。叫声像"嘎嘎"，有的地方叫它嘎牙子。',
+  '鲶鱼': '嘴边长着胡须，爱待在泥底。没鳞、滑溜溜，越脏的水越活得自在。',
+  '黑鱼': '能在水面吸空气，离了水也能活很久。护崽凶，连钓鱼的人都敢咬。',
+  '泥鳅': '身子滑得抓不住，一钻就进泥里。缺氧时能靠肠子呼吸。',
+  '翘嘴鲌': '嘴向上翘，专在水面追小鱼。游得快，性子急，是淡水里的猎手。',
+  '虹鳟': '冷水里长大的鱼，身侧有一道彩虹般的红带。肉质细嫩，适合清蒸。',
+  '锦鲤': '由鲤鱼人工培育而来，花色越特别越值钱。寿命长，能养几十年。',
+  '河鲀': '遇险会鼓成一个球吓退敌人。内脏有剧毒，处理不好会出人命。',
+  '马口鱼': '爱在急流浅滩活动，嘴大爱吃小鱼。体侧常有竖条纹，游姿敏捷。',
+  '溪石斑': '住在山溪石头缝里，体侧带斑纹。对水质要求高，干净溪流才有。',
+  '冷水狗鱼': '冷水域的凶猛猎手，嘴尖牙利。会一动不动装木头，再突然扑食。',
+  '香鱼': '背上有层香脂，闻着有瓜果香，因此得名。只活一年，秋季产卵后死去。',
+  '花鳗鲡': '身上的花斑会随年龄变化。能在泥里打洞，离开水也能短途爬行。',
+  '鱤鱼': '淡水里的顶级猎手，追着鱼群吃。个头大、冲刺猛，俗称水老虎。',
+  '野生青鱼': '四大家鱼之一，爱吃螺蛳，咽部有磨碎硬壳的牙。长得厚实，力大。',
+  '哲罗鲑': '北方冷水河的大家伙，性情凶猛。传说里"水怪"的原型常是它。',
+  '大马哈鱼': '洄游产卵的鱼，回河时身体会变红。拼尽全力上溯，产卵后大多死去。',
+  '江鳕': '淡水里少有的鳕鱼，爱冷水深潭。只在大江大河里能见到。',
+  '麦穗鱼': '个头小、数量多，到处都有。常成群在水面抢食，是入门最好钓的鱼。',
+  '普通鲤鱼': '分布最广的淡水鱼之一，嘴边有两对小须。生命力顽强，哪里都能活。',
+  '罗非鱼': '原产非洲，适应力极强，繁殖快。口里能孵小鱼，遇到危险含回嘴里。',
+  '鳑鲏': '小体型、颜色艳，繁殖时把卵产在河蚌壳里。雄鱼发情期格外好看。',
+  '淡水鲈鱼': '河口和淡水都能活，爱躲在障碍物边伏击小鱼。背鳍带硬刺，拿的时候小心。',
+  '旗鱼': '背鳍像面旗子，上颚长成一根尖枪。是海里游得最快的鱼之一。',
+  '蓝鳍金枪鱼': '体型巨大、能在冷水里保持体温。囤积脂肪后极其名贵，一条能拍出天价。',
+  '沙丁鱼': '成群结队、数量惊人，是食物链底层的要角。常被做成罐头，便宜又营养。',
+  '凤尾鱼': '小小的银色鱼，腌一腌就是常见的调味小鱼。爱扎堆，一散开就被大鱼吞。',
+  '黑鲷': '礁石区常见，嘴硬爱吃贝类。钓鱼人眼里的硬仗，警惕性高。',
+  '真鲷': '通体淡红，是好兆头的象征，宴席上的上宾。眼睛比身子还显眼。',
+  '鲭鱼': '就是青花鱼，游速快、身上有波浪状条纹。不耐放，一上岸就得赶紧处理。',
+  '海鲈鱼': '河口近海都能钓，白天躲、夜里摄食。肉质细嫩，是不少人的心头好。',
+  '鲻鱼': '爱在河口咸淡水交界处活动，常跃出水面。以泥里的藻类为食，很耐污。',
+  '银鲳鱼': '身子扁圆像面镜子，几乎没有硬刺。肉厚味鲜，清蒸红烧都合适。',
+  '秋刀鱼': '身形细长像刀，秋天最肥美。内藏肥油，炭烤时满口鲜香。',
+  '六线鱼': '体侧有六条感觉孔线，因此得名。礁石边常见，肉质紧实。',
+  '海鳗': '蛇一样的身子，牙尖性凶，昼伏夜出。力气大，缠上钩很难缠。',
+  '马鲛鱼': '就是鲅鱼，游得快、性凶猛。北方包饺子的常用料，肉质紧实。',
+  '深海比目鱼': '两只眼睛长在同一侧，平躺在海底。小时候眼睛正常，长大才"搬家"到一边。',
+  '龙胆石斑鱼': '石斑里的大型种，藏身礁洞伏击猎物。个头大、价高，是名贵食用鱼。',
+  '东星斑': '一身红底蓝点，好看又好吃。价格不菲，多是酒席上的菜。',
+  '大黄鱼': '头里有两粒"耳石"，据说能助平衡。会发声，产卵季海里嗡嗡响成一片。',
+  '小型金枪鱼': '金枪鱼里的"小个子"，游速依然很快。红肉富含油脂，常做刺身。',
+  '大西洋鳕鱼': '鳕鱼的代表种，曾是欧洲的"海中黄金"。肉质洁白，炸鱼薯条常用它。',
+  '盲鳗': '遇险会分泌大量黏液糊住敌人。没有脊椎，是最原始的鱼类之一。',
+  '鳐鱼': '身体扁平像张毯子，尾巴细长像鞭。贴着海底游，有的种类尾部带电。',
+  '大闸蟹': '秋天最肥，淡水河湖都能钓到。两只大钳子上长着一层绒毛，蟹黄最香。',
+  '帝王蟹': '螃蟹里个头最大的一种，腿展开能有一米多。住在寒冷海底，肉多，价也不便宜。',
+  '松叶蟹': '腿又细又长，是蟹里的长腿冠军。冬天捞的最甜，肉丝撕开像松针。',
+  '小龙虾': '爱待在沟渠和浅水里，特别能适应环境。个头不大，夜市上却是主角。',
+  '波士顿龙虾': '一对粗螯加两根长触须，很好认。白天躲石头缝，夜里出来找食。',
+  '鱿鱼': '遇到危险先喷一团墨，再飞快溜走。身子是锥形，游得挺快。',
+  '普通章鱼': '八条腕，脑子好使，会开瓶盖也会认脸。腕一摊开像把伞。',
+  '河蚌': '住在淡水泥底，壳黑褐色、形状不太规整。运气好，壳里能开出珍珠。',
+  '海胆': '浑身是刺，所以基本没人养它当宠物。敲开壳，里面是金黄的海胆黄。',
+  '扇贝': '爱待浅海，退潮时能看见它半张着壳。壳上有放射状肋纹，边上还有两片耳状凸起。',
+  '牡蛎': '成群附在滩涂和礁石上，是最常见的贝。长得不起眼，味道却压得住一桌。'
+};
+
+/* 图鉴点击小图 → 大立绘 + 一句话介绍（独立弹层，不影响原有界面） */
+function showFishDetail(name, shape, color, known) {
+  let mask = document.getElementById('fishDetailMask');
+  if (!mask) {
+    mask = document.createElement('div');
+    mask.id = 'fishDetailMask';
+    mask.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:9999;display:none;align-items:center;justify-content:center;flex-direction:column;cursor:pointer;';
+    mask.innerHTML = '<canvas id="fishDetailCv" width="32" height="32" style="image-rendering:pixelated;width:min(64vw,320px);height:min(64vw,320px);background:#edf3ef;border-radius:8px;"></canvas>'
+      + '<div id="fishDetailName" style="margin-top:14px;color:#fff;font-size:16px;font-weight:600;"></div>'
+      + '<div id="fishDetailDesc" style="margin-top:6px;color:#c8d0c8;font-size:13px;max-width:82vw;text-align:center;line-height:1.7;"></div>';
+    document.body.appendChild(mask);
+    mask.onclick = function () { mask.style.display = 'none'; };
+  }
+  const cv = document.getElementById('fishDetailCv'), cx = cv.getContext('2d');
+  cx.clearRect(0, 0, 32, 32);
+  if (known) drawFishIcon(cx, shape, color, name); else drawQuestionIcon(cx);
+  const base = String(name || '').replace(/\(.*?\)/g, '');
+  const tags = (typeof getTags === 'function') ? getTags({ name: name, shape: shape, color: color }) : [];
+  document.getElementById('fishDetailName').textContent = known ? base : '？？？';
+  document.getElementById('fishDetailDesc').textContent = known
+    ? (FISH_INTRO[base] || FISH_INTRO[name] || '（这条鱼还没有图鉴记录。）') + (tags.length ? '（' + tags.join(' / ') + '）' : '')
+    : '尚未捕获，详细信息未知。';
+  mask.style.display = 'flex';
 }
 init();
 </script>
