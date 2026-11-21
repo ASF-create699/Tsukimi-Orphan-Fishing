@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#f4efe3">
-<title>月都孤儿 · 钓鱼生存 v0.3.7</title>
+<title>月都孤儿 · 钓鱼生存 v0.3.8</title>
 <style>
   :root {
     --bg: #f4efe3; --panel: #fffdf5; --panel2: #f7f1e1;
@@ -3428,6 +3428,18 @@ function processZhangyueEvent(mainRemainTime = 0) {
         let slots = getFishSlots(size);
         if (getBagUsed() + slots <= state.bagCap) {
             state.fishBag.push({ name: fish.name, size: size, price: fish.price, shape: fish.shape, color: fish.color, time: state.totalMinutes || 0, rot: 0, isDried: false, tags: fish.tags, seasons: fish.seasons || [], frozen: false });
+            // 补写图鉴捕获记录（与主流程 strikeFish 保持一致；章月系不收录）
+            if (!fish.tags || !fish.tags.includes("takotsuki")) {
+                let zyCodexKey = state.loc + "_" + fish.name;
+                if (!state.caughtRecords) state.caughtRecords = {};
+                if (!state.caughtRecords[zyCodexKey]) state.caughtRecords[zyCodexKey] = { size: size, count: 1, firstDay: getDayKey() };
+                else {
+                    let zyRec = state.caughtRecords[zyCodexKey];
+                    if (size > zyRec.size) zyRec.size = size;
+                    zyRec.count += 1;
+                }
+                addLog(`[章月-图鉴] 已收录 ${fish.name}（${state.loc}）到图鉴。`, "log-ok");
+            }
             addLog(`[章月] 成功钓上 ${fish.name} 并放入鱼篓。`, "log-ok");
             showDialog("章月上鱼", "takotsuki", `旁边的水花突然溅起！\n\n章月用它的小触手死死抱住一条 ${size}cm 的【${fish.name}】，邀功似的扔进了你的鱼篓里，然后吐了一串开心的小泡泡。`, [
                 { txt: "摸摸它", fn: () => { 
@@ -3568,6 +3580,7 @@ function castLine() {
   let mainWaitTime = 30;
   let branch = rnd(1, 100);
   let isJunk = (branch <= 20);
+  addLog(`[分支] 杂物/上钩判定：掷出 ${branch}（≤20 为杂物/空军）→ ${isJunk ? '杂物/空军' : '有鱼上钩'}${isUsingEgg ? '（章月卵特权：强制有鱼）' : ''}`, "log-dice");
   
   // 章月卵特权：必定不会钓到杂物
   if (isUsingEgg) isJunk = false;
@@ -3588,7 +3601,9 @@ function castLine() {
       
       if (idleTakotsuki > 0) {
           let attackProb = idleTakotsuki * 5;
-          if (rnd(1, 100) <= attackProb) {
+          let attackRoll = rnd(1, 100);
+          addLog(`[章月捣乱] 闲置章月 ${idleTakotsuki} 只，干扰概率 ${attackProb}%。掷出 ${attackRoll} → ${attackRoll <= attackProb ? '触发打断' : '未触发'}`, attackRoll <= attackProb ? "log-err" : "log-dice");
+          if (attackRoll <= attackProb) {
               addTime(30);
               state.springDrug = clamp(state.springDrug + (10 * idleTakotsuki), 0, 100);
               addStats(0, 10);
@@ -3612,7 +3627,9 @@ function castLine() {
       
       let zyBonus = state.takotsukiCount * 5;
       let currentLuck = 60 + zyBonus;
+      addLog(`[渔获-幸运] 目标值 ${currentLuck}（基础60 + 章月${state.takotsukiCount}只×5=${zyBonus}），奖/罚骰池 ${luckPool}。`, "log-dice");
       let luckCheck = checkLuck(currentLuck, luckPool);
+      addLog(`[渔获-幸运] ${luckCheck.detail} → 判定【${luckCheck.txt}】（阈值 大成功=1/极难≤${Math.floor(currentLuck/5)}/困难≤${Math.floor(currentLuck/2)}/常规≤${currentLuck}），耗时 ${luckCheck.wait} 分钟。`, luckCheck.level === "失败" ? "log-err" : "log-ok");
       
       if (luckCheck.level === "失败") {
           mainWaitTime = 30; 
@@ -3621,6 +3638,8 @@ function castLine() {
       } else {
           mainWaitTime = luckCheck.wait;
           let rarRes = pickRarity(luckCheck.level);
+          const _rarName = { common: "普通", uncommon: "少见", rare: "稀有", epic: "极品" };
+          addLog(`[稀有度] 稀有度表【${rarRes.key}】掷出 ${rarRes.roll} → ${_rarName[rarRes.chosen]}(${rarRes.chosen})${isUsingEgg ? '（章月卵：稀有度+1档）' : ''}`, "log-dice");
           if (isUsingEgg) {
               if (rarRes.chosen === "common") rarRes.chosen = "uncommon";
               else if (rarRes.chosen === "uncommon") rarRes.chosen = "rare";
@@ -3637,6 +3656,7 @@ function castLine() {
           let fish = drawFromPool(fishPool);
           let size = rnd(fish.min, fish.max);
           if (state.displayWeather === "rain_heavy") size = Math.max(size, 20);
+          addLog(`[渔获-成鱼] 从鱼池(${fishPool.length}种)抽中【${fish.name}】，尺寸 ${fish.min}~${fish.max}cm 掷出 ${size}cm${state.displayWeather === "rain_heavy" && size === 20 ? '（暴雨保底≥20）' : ''}。`, "log-ok");
           G.pendingFish = { fish, size };
       }
   } else {
@@ -3698,6 +3718,7 @@ function castLine() {
       addTime(mainWaitTime);
       if (isJunk) {
           let luckRoll = rollD100(0);
+          addLog(`[杂物] 垃圾/宝物判定：掷出 ${luckRoll.result}（>60 为纯垃圾，1=极品/≤12=稀有/≤30=少见/其余=普通）`, "log-dice");
           if (luckRoll.result > 60) {
               addStats(1.5, 1);
               $('fishLog').textContent = "你钓上来一团水草和垃圾，只好扔掉了。";
@@ -3777,10 +3798,13 @@ function strikeFish() {
       
       let success = true;
       if (size >= 20) {
+        addLog(`[体育] 修正项：基础目标 ${state.stats.pe} → 体型${req}(${size >= 90 ? '÷5' : size >= 50 ? '÷2' : '常规'})后 ${peTarget}；疼痛${state.pain}→修正${painPenalty}；疲劳${state.fatigue}${state.fatigue >= 85 && size >= 50 ? '≥85且大鱼→再÷2' : ''}；天气/鱼竿奖罚骰池 ${pePool}`, "log-dice");
         if (state.eq.rod === "carbon_rod") peTarget += 10;
         let peRoll = rollD100(pePool);
         success = (peRoll.result <= peTarget);
-        addLog(`[体育] 需【${req}成功】，目标 ≤${peTarget}。${peRoll.detail} → ${success ? '成功' : '失败'}`, success ? "log-ok" : "log-err");
+        addLog(`[体育] 需【${req}成功】，最终目标 ≤${peTarget}。${peRoll.detail} → ${success ? '成功' : '失败'}`, success ? "log-ok" : "log-err");
+      } else {
+        addLog(`[体育] 尺寸 ${size}cm < 20cm，无需检定，直接上手。`, "log-ok");
       }
       
       if (success) {
